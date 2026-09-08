@@ -101,6 +101,30 @@ Shared flags: `--source`, `--add-source`, `--configfile`, `--version`,
 `--disable-parallel`, `--ignore-failed-sources`, `--no-http-cache`,
 `--interactive`.
 
+## Startup time
+
+Cold is empty-cache download → start; cached is start only (`tool@version` so
+neither runner resolves latest). linux-x64 (WSL2) is SDK 10.0.110; win-x64 is
+SDK 10.0.303.
+
+| Tool | Runner | Cold linux-x64 | Cold win-x64 | Cached linux-x64 | Cached win-x64 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `stop@2.1.0` (native AOT) | `dnx` | 2.2 s | 2.1 s | 580 ms | 520 ms |
+| | `ndx` | **1.2 s** | **1.5 s** | **10 ms** | **34 ms** |
+| `dotnetsay@1.0.0` (framework-dependent) | `dnx` | 1.6 s | 1.8 s | 570 ms | 545 ms |
+| | `ndx` | **849 ms** | **1.1 s** | **12 ms** | **50 ms** |
+| `winget` (native AOT TUI, Windows) | `dnx` | — | 2.7 s | — | 820 ms |
+| | `ndx` | — | **1.2 s** | — | **275 ms** |
+
+Isolated `NUGET_PACKAGES`. `stop` / `dotnetsay` from
+`https://kzu.blob.core.windows.net/nuget/index.json`; `winget` from nuget.org.
+Cold is the median of 3 empty-cache runs. Cached is the median of 10 runs after
+one seed. `stop` invoked as `-- --help`; `dotnetsay` as `-- ndx`. `winget` is
+a TUI so it does not exit on its own: cold is `winget` (latest), cached is
+`winget@0.13.2`; each run waits until `winget-tui` is up, then `ndx stop@2.1.0`
+signals that PID and the clock stops when the runner exits. `dnx` is the SDK
+script (`dotnet dnx`). `winget` timings are win-x64 SDK 11.0.100-preview.
+
 ## Evergreen
 
 Unlike `dnx`, omitting the version is `@*` — not a one-shot latest.
@@ -141,30 +165,6 @@ The poll interval defaults to 5 seconds and can be set in `.netconfig`:
 
 ndx walks from the working directory up, then `~/.netconfig`. `--verbosity
 quiet` hides the `Updating …` line.
-
-## Startup time
-
-Cold is empty-cache download → start; cached is start only (`tool@version` so
-neither runner resolves latest). linux-x64 (WSL2) is SDK 10.0.110; win-x64 is
-SDK 10.0.303.
-
-| Tool | Runner | Cold linux-x64 | Cold win-x64 | Cached linux-x64 | Cached win-x64 |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `stop@2.1.0` (native AOT) | `dnx` | 2.2 s | 2.1 s | 580 ms | 520 ms |
-| | `ndx` | **1.2 s** | **1.5 s** | **10 ms** | **34 ms** |
-| `dotnetsay@1.0.0` (framework-dependent) | `dnx` | 1.6 s | 1.8 s | 570 ms | 545 ms |
-| | `ndx` | **849 ms** | **1.1 s** | **12 ms** | **50 ms** |
-| `winget` (native AOT TUI, Windows) | `dnx` | — | 2.7 s | — | 820 ms |
-| | `ndx` | — | **1.2 s** | — | **275 ms** |
-
-Isolated `NUGET_PACKAGES`. `stop` / `dotnetsay` from
-`https://kzu.blob.core.windows.net/nuget/index.json`; `winget` from nuget.org.
-Cold is the median of 3 empty-cache runs. Cached is the median of 10 runs after
-one seed. `stop` invoked as `-- --help`; `dotnetsay` as `-- ndx`. `winget` is
-a TUI so it does not exit on its own: cold is `winget` (latest), cached is
-`winget@0.13.2`; each run waits until `winget-tui` is up, then `ndx stop@2.1.0`
-signals that PID and the clock stops when the runner exits. `dnx` is the SDK
-script (`dotnet dnx`). `winget` timings are win-x64 SDK 11.0.100-preview.
 
 <!-- #content -->
 ---
