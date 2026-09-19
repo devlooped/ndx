@@ -35,6 +35,8 @@ Windows (PowerShell):
 irm https://github.com/devlooped/ndx/releases/latest/download/install.ps1 | iex
 ```
 
+> Or via [winget](https://github.com/microsoft/winget-pkgs/pull/437477): `winget install Devlooped.ndx`
+>
 > Alternatively (perhaps of debatable utility), you can install using the .NET SDK too:
 > `dotnet tool install -g ndx`
 
