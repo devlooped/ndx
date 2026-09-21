@@ -38,16 +38,22 @@ irm https://github.com/devlooped/ndx/releases/latest/download/install.ps1 | iex
 > Alternatively (perhaps of debatable utility), you can install using the .NET SDK too:
 > `dotnet tool install -g ndx`
 
-The Linux archives are glibc builds. Each is also published as
-`ndx-<version>-linux-<arch>-gnu.tar.gz` so an installer can see that it needs
-GNU libc. Alpine and other musl systems get `linux-musl-x64` / `linux-musl-arm64`,
-both as release archives (`install.sh` selects them) and as NuGet RID packages,
-so `dotnet tool install -g ndx` does too.
+The installer reads the `ndx.<rid>` flat-container index on nuget.org, downloads
+that RID package, checks the catalog SHA512, and copies `tools/any/<rid>/ndx`
+into place. If nuget.org can't be reached, it uses the blob feed at
+`https://kzu.blob.core.windows.net/nuget`. `NDX_VERSION=ci` still installs the
+rolling GitHub Release.
+
+glibc Linux builds are `linux-x64` / `linux-arm64`. Alpine and other musl
+systems get `linux-musl-x64` / `linux-musl-arm64`, so `dotnet tool install -g ndx`
+does too. The same bits are attached to the GitHub Release, including a
+`ndx-<version>-linux-<arch>-gnu.tar.gz` alias so an installer can see that the
+glibc build needs GNU libc.
 
 
 ## Update
 
-Self-update the installed binary (optional version, including downgrades):
+Self-update the installed binary from the same NuGet RID package (optional version, including downgrades). `ndx --update ci` still tracks the rolling GitHub Release.
 
 ```bash
 ndx --update

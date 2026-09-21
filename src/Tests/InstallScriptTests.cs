@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using ndx;
 
 namespace Tests;
@@ -276,9 +277,96 @@ public class InstallScriptTests
         Assert.Contains("ci)", sh);
         Assert.Contains("tag=ci", sh);
         Assert.Contains("version=ci", sh);
-        Assert.Contains("$Version -eq 'ci'", ps);
+        Assert.Contains("$Version.ToLowerInvariant() -eq 'ci'", ps);
         Assert.Contains("$tag = 'ci'", ps);
         Assert.Contains("$resolved = 'ci'", ps);
+        Assert.DoesNotContain("api.github.com", sh);
+        Assert.DoesNotContain("api.github.com", ps);
+        Assert.Contains("https://api.nuget.org/v3-flatcontainer", sh);
+        Assert.Contains("https://api.nuget.org/v3/registration5-gz-semver2", sh);
+        Assert.Contains("https://kzu.blob.core.windows.net/nuget/flatcontainer", sh);
+        Assert.Contains("tools/any/", sh);
+        Assert.Contains("https://api.nuget.org/v3-flatcontainer", ps);
+        Assert.Contains("https://api.nuget.org/v3/registration5-gz-semver2", ps);
+        Assert.Contains("https://kzu.blob.core.windows.net/nuget/flatcontainer", ps);
+        Assert.Contains("tools/any/", ps);
+    }
+
+    [Fact]
+    public void Shell_installer_unpacks_the_highest_stable_rid_package_from_nuget()
+    {
+        var sh = FindBash() is not null ? "/bin/sh" : null;
+        Assert.True(sh is not null && File.Exists(sh), "sh is required to verify install.sh");
+
+        using var feed = new ScriptFeed();
+        using var dir = new TempDir();
+        var payload = "from-nuget"u8.ToArray();
+        var nupkg = File.ReadAllBytes(RidNupkg.Write(dir.Publish, "linux-x64", payload));
+        var hash = Convert.ToBase64String(System.Security.Cryptography.SHA512.HashData(nupkg));
+        const string version = "1.0.10";
+        var catalog = feed.Url($"/catalog/ndx.linux-x64.{version}.json");
+        feed.Map($"/nuget/flat/ndx.linux-x64/index.json", """{"versions":["1.0.9","1.0.10","2.0.0-preview"]}""");
+        feed.Map($"/nuget/flat/ndx.linux-x64/{version}/ndx.linux-x64.{version}.nupkg", nupkg, "application/octet-stream");
+        feed.Map($"/nuget/reg/ndx.linux-x64/{version}.json",
+            "{\"catalogEntry\":\"" + catalog + "\",\"@context\":{\"catalogEntry\":{\"@type\":\"@id\"}}}");
+        feed.Map($"/catalog/ndx.linux-x64.{version}.json",
+            $$"""
+            {
+              "packageHashAlgorithm": "SHA512",
+              "packageHash": "{{hash}}"
+            }
+            """);
+
+        RunFeedInstall("/bin/sh", FindRepoRoot(), dir, feed, "linux-x64");
+
+        Assert.Equal(payload, File.ReadAllBytes(Path.Combine(dir.Prefix, "ndx")));
+        Assert.DoesNotContain(feed.Hits, hit => hit.Contains("/blob/", StringComparison.Ordinal));
+        Assert.Contains(feed.Hits, hit => hit.Contains($"/ndx.linux-x64/{version}/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Shell_installer_uses_the_blob_feed_when_nuget_org_is_unavailable()
+    {
+        Assert.True(File.Exists("/bin/sh"), "sh is required to verify install.sh");
+
+        using var feed = new ScriptFeed();
+        using var dir = new TempDir();
+        var payload = "from-blob"u8.ToArray();
+        var nupkg = File.ReadAllBytes(RidNupkg.Write(dir.Output, "linux-x64", payload));
+        const string version = "3.1.0";
+        feed.Map("/nuget/flat/ndx.linux-x64/index.json", "unavailable", status: 503);
+        feed.Map($"/blob/flat/ndx.linux-x64/index.json", $$"""{"versions":["{{version}}"]}""");
+        feed.Map($"/blob/flat/ndx.linux-x64/{version}/ndx.linux-x64.{version}.nupkg", nupkg, "application/octet-stream");
+
+        RunFeedInstall("/bin/sh", FindRepoRoot(), dir, feed, "linux-x64");
+
+        Assert.Equal(payload, File.ReadAllBytes(Path.Combine(dir.Prefix, "ndx")));
+        Assert.Contains(feed.Hits, hit => hit.Contains("/blob/flat/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Shell_installer_rejects_a_catalog_hash_mismatch()
+    {
+        Assert.True(File.Exists("/bin/sh"), "sh is required to verify install.sh");
+
+        using var feed = new ScriptFeed();
+        using var dir = new TempDir();
+        var nupkg = File.ReadAllBytes(RidNupkg.Write(dir.Publish, "linux-x64", "bad"u8.ToArray()));
+        const string version = "1.2.0";
+        var catalog = feed.Url($"/catalog/ndx.linux-x64.{version}.json");
+        feed.Map($"/nuget/flat/ndx.linux-x64/index.json", $$"""{"versions":["{{version}}"]}""");
+        feed.Map($"/nuget/flat/ndx.linux-x64/{version}/ndx.linux-x64.{version}.nupkg", nupkg, "application/octet-stream");
+        feed.Map($"/nuget/reg/ndx.linux-x64/{version}.json",
+            $$"""{"catalogEntry":"{{catalog}}"}""");
+        feed.Map($"/catalog/ndx.linux-x64.{version}.json",
+            """{"packageHash":"AA==","packageHashAlgorithm":"SHA512"}""");
+
+        var (exit, stdout, stderr) = RunFeedInstall("/bin/sh", FindRepoRoot(), dir, feed, "linux-x64", expectSuccess: false);
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("SHA512", stderr);
+        Assert.False(File.Exists(Path.Combine(dir.Prefix, "ndx")), stdout);
+        Assert.DoesNotContain(feed.Hits, hit => hit.Contains("/blob/", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -304,6 +392,46 @@ public class InstallScriptTests
         Assert.Contains("uninstall.ps1", yml);
         Assert.Contains("uninstall.sh", ci);
         Assert.Contains("uninstall.ps1", ci);
+    }
+
+    static (int ExitCode, string Stdout, string Stderr) RunFeedInstall(
+        string shell,
+        string repoRoot,
+        TempDir dir,
+        ScriptFeed feed,
+        string rid,
+        bool expectSuccess = true)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = shell,
+            WorkingDirectory = repoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add(Path.Combine(repoRoot, "install.sh"));
+        start.Environment["HOME"] = dir.Home;
+        start.Environment["NDX_PREFIX"] = dir.Prefix;
+        start.Environment["NDX_RID"] = rid;
+        start.Environment["NDX_SKIP_PATH"] = "1";
+        start.Environment["NDX_VERSION"] = "";
+        start.Environment["NDX_ARCHIVE"] = "";
+        start.Environment["NDX_NUGET_FLAT"] = feed.Url("/nuget/flat");
+        start.Environment["NDX_NUGET_REG"] = feed.Url("/nuget/reg");
+        start.Environment["NDX_BLOB_FLAT"] = feed.Url("/blob/flat");
+
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("failed to start sh");
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (expectSuccess)
+        {
+            Assert.True(process.ExitCode == 0, $"install.sh failed ({process.ExitCode}).{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+            Assert.Contains("installed", stdout);
+        }
+
+        return (process.ExitCode, stdout, stderr);
     }
 
     static (int ExitCode, string Stdout, string Stderr) RunPowershell(string script, TempDir dir, string? archive, bool skipPath)
@@ -457,6 +585,106 @@ public class InstallScriptTests
         }
 
         throw new InvalidOperationException("Could not locate repo root.");
+    }
+
+    sealed class ScriptFeed : IDisposable
+    {
+        readonly HttpListener listener = new();
+        readonly object gate = new();
+        readonly Dictionary<string, (int Status, byte[] Body, string ContentType)> map = new(StringComparer.Ordinal);
+        readonly Task loop;
+
+        public List<string> Hits { get; } = [];
+        public string BaseUrl { get; }
+
+        public ScriptFeed()
+        {
+            var port = FreePort();
+            BaseUrl = $"http://127.0.0.1:{port}";
+            listener.Prefixes.Add(BaseUrl + "/");
+            listener.Start();
+            loop = Task.Run(Serve);
+        }
+
+        public string Url(string path) => BaseUrl + path;
+
+        public void Map(string path, string body, string contentType = "application/json", int status = 200)
+            => Map(path, System.Text.Encoding.UTF8.GetBytes(body), contentType, status);
+
+        public void Map(string path, byte[] body, string contentType = "application/json", int status = 200)
+        {
+            lock (gate)
+                map[path] = (status, body, contentType);
+        }
+
+        async Task Serve()
+        {
+            while (listener.IsListening)
+            {
+                HttpListenerContext ctx;
+                try
+                {
+                    ctx = await listener.GetContextAsync().ConfigureAwait(false);
+                }
+                catch (Exception) when (!listener.IsListening)
+                {
+                    break;
+                }
+                catch (HttpListenerException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
+                var path = ctx.Request.Url?.AbsolutePath ?? "";
+                (int Status, byte[]? Body, string? ContentType) mapped;
+                lock (gate)
+                {
+                    Hits.Add(path);
+                    map.TryGetValue(path, out var found);
+                    mapped = (found.Status, found.Body, found.ContentType);
+                }
+                var status = mapped.Body is null ? 404 : mapped.Status;
+                var body = mapped.Body ?? "not found"u8.ToArray();
+                var type = mapped.ContentType ?? "text/plain";
+                ctx.Response.StatusCode = status;
+                ctx.Response.ContentType = type;
+                ctx.Response.ContentLength64 = body.Length;
+                ctx.Response.KeepAlive = false;
+                try
+                {
+                    ctx.Response.OutputStream.Write(body, 0, body.Length);
+                    ctx.Response.OutputStream.Close();
+                }
+                catch (HttpListenerException)
+                {
+                }
+                finally
+                {
+                    ctx.Response.Close();
+                }
+            }
+        }
+
+        static int FreePort()
+        {
+            var tcp = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            tcp.Start();
+            var port = ((System.Net.IPEndPoint)tcp.LocalEndpoint).Port;
+            tcp.Stop();
+            return port;
+        }
+
+        public void Dispose()
+        {
+            listener.Stop();
+            listener.Close();
+            try { loop.Wait(TimeSpan.FromSeconds(2)); }
+            catch (AggregateException) { }
+        }
     }
 
     sealed class TempDir : IDisposable

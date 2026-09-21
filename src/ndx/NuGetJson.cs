@@ -31,6 +31,8 @@ sealed class RegistrationLeaf
 sealed class CatalogLeaf
 {
     public long? PackageSize { get; set; }
+    public string? PackageHash { get; set; }
+    public string? PackageHashAlgorithm { get; set; }
 }
 
 sealed class RuntimeGraphFile
@@ -42,12 +44,6 @@ sealed class RuntimeGraphNode
 {
     [JsonPropertyName("#import")]
     public string[]? Import { get; set; }
-}
-
-sealed class GitHubRelease
-{
-    [JsonPropertyName("tag_name")]
-    public string? TagName { get; set; }
 }
 
 sealed class RuntimeConfigFile
@@ -78,6 +74,5 @@ sealed class RuntimeConfigFramework
 [JsonSerializable(typeof(RegistrationLeaf))]
 [JsonSerializable(typeof(CatalogLeaf))]
 [JsonSerializable(typeof(RuntimeGraphFile))]
-[JsonSerializable(typeof(GitHubRelease))]
 [JsonSerializable(typeof(RuntimeConfigFile))]
 sealed partial class NuGetJsonContext : JsonSerializerContext;
