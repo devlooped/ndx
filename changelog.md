@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.2](https://github.com/devlooped/ndx/tree/v1.0.2) (2026-09-21)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.0.2)
+
+:sparkles: Implemented enhancements:
+
+- Publish musl builds and glibc -gnu archive aliases [\#28](https://github.com/devlooped/ndx/pull/28) (@kzu)
+
 ## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-08-27)
 
 [Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.1...ci)
