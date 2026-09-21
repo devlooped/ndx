@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using ndx;
 
@@ -79,8 +80,9 @@ public class SelfUpdateTests
         Assert.Equal(0, code);
         Assert.Equal(payload, File.ReadAllBytes(current));
         Assert.Contains("already 0.2.0", host.Out.ToString());
-        Assert.Equal(1, handler.Hits.Count(u => u.Contains("/releases/latest", StringComparison.Ordinal)));
-        Assert.DoesNotContain(handler.Hits, u => u.Contains("/releases/download/", StringComparison.Ordinal));
+        Assert.Equal(1, handler.Hits.Count(u => u.Contains("/index.json", StringComparison.Ordinal)));
+        Assert.DoesNotContain(handler.Hits, u => u.EndsWith(".nupkg", StringComparison.Ordinal));
+        Assert.DoesNotContain(handler.Hits, u => u.Contains("/releases/latest", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -159,7 +161,7 @@ public class SelfUpdateTests
     }
 
     [Fact]
-    public async Task Update_extracts_a_unix_targz_archive()
+    public async Task Update_extracts_the_rid_binary_from_the_nupkg()
     {
         using var dir = new TempDir();
         var current = Path.Combine(dir.Prefix, "ndx");
@@ -167,16 +169,7 @@ public class SelfUpdateTests
 
         const string unixRid = "linux-x64";
         using var handler = new MapHandler();
-        var packed = NativePacker.Pack(
-            RidNupkg.Write(Path.Combine(dir.Root, "nupkg-unix"), unixRid, "new-unix"u8.ToArray()),
-            unixRid,
-            Path.Combine(dir.Root, "out-unix"),
-            "0.3.0");
-        var name = Path.GetFileName(packed.ArchivePath);
-        handler.Map[SelfUpdate.AssetUrl(Repo, "v0.3.0", name)] =
-            (HttpStatusCode.OK, File.ReadAllBytes(packed.ArchivePath), "application/octet-stream");
-        handler.Map[SelfUpdate.AssetUrl(Repo, "v0.3.0", name) + ".sha256"] =
-            (HttpStatusCode.OK, File.ReadAllBytes(packed.Sha256Path), "text/plain");
+        AddPackage(handler, dir, "0.3.0", "new-unix"u8.ToArray(), SelfUpdate.NugetFlatContainer, SelfUpdate.NugetRegistration, unixRid);
 
         var host = new NdxHost
         {
@@ -216,23 +209,53 @@ public class SelfUpdateTests
     }
 
     [Fact]
-    public async Task Sha256_mismatch_leaves_the_current_binary()
+    public async Task Sha512_mismatch_leaves_the_current_binary()
     {
         using var dir = new TempDir();
         var current = Path.Combine(dir.Prefix, "ndx.exe");
         File.WriteAllBytes(current, "old-binary"u8.ToArray());
 
         using var handler = Feed(dir, latest: "0.2.0", payload: "new-binary"u8.ToArray());
-        var archive = SelfUpdate.ArchiveFileName(Rid, "0.2.0");
-        handler.Map[SelfUpdate.AssetUrl(Repo, "v0.2.0", archive) + ".sha256"] =
-            (HttpStatusCode.OK, "0"u8.ToArray(), "text/plain");
+        handler.Map[CatalogUrl(SelfUpdate.RidPackageId(Rid), "0.2.0")] =
+            (HttpStatusCode.OK, """{"packageHash":"AA==","packageHashAlgorithm":"SHA512"}"""u8.ToArray(), "application/json");
         var host = NewHost(dir, current, "0.1.0", handler);
 
         var code = await App.RunAsync(["--update"], host);
 
         Assert.Equal(1, code);
         Assert.Equal("old-binary"u8.ToArray(), File.ReadAllBytes(current));
-        Assert.Contains("SHA256", host.Error.ToString());
+        Assert.Contains("SHA512", host.Error.ToString());
+        Assert.DoesNotContain(handler.Hits, u => u.Contains("blob.core.windows.net", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Update_falls_back_to_the_blob_feed_when_nuget_org_is_unavailable()
+    {
+        using var dir = new TempDir();
+        var current = Path.Combine(dir.Prefix, "ndx.exe");
+        File.WriteAllBytes(current, "old-binary"u8.ToArray());
+
+        using var handler = new MapHandler();
+        var id = SelfUpdate.RidPackageId(Rid);
+        handler.Map[SelfUpdate.FlatIndexUrl(SelfUpdate.NugetFlatContainer, id)] =
+            (HttpStatusCode.ServiceUnavailable, "nope"u8.ToArray(), "text/plain");
+        AddIndex(handler, SelfUpdate.BlobFlatContainer, "0.4.0");
+        AddPackage(handler, dir, "0.4.0", "blob-binary"u8.ToArray(), SelfUpdate.BlobFlatContainer, registration: null);
+
+        var host = NewHost(dir, current, "0.1.0", handler);
+        var code = await App.RunAsync(["--update"], host);
+
+        Assert.Equal(0, code);
+        Assert.Equal("blob-binary"u8.ToArray(), File.ReadAllBytes(current));
+        Assert.Contains("Updating to 0.4.0", host.Out.ToString());
+    }
+
+    [Fact]
+    public void SelectLatestStable_skips_prereleases_and_picks_the_highest_version()
+    {
+        var latest = SelfUpdate.SelectLatestStable(["1.0.9", "1.0.10", "2.0.0-preview", "1.2.0"]);
+        Assert.Equal("1.2.0", latest);
+        Assert.Null(SelfUpdate.SelectLatestStable(["1.0.0-ci", "9.9.9-preview"]));
     }
 
     static NdxHost NewHost(TempDir dir, string executable, string currentVersion, MapHandler handler, IProcessRunner? runner = null)
@@ -257,15 +280,53 @@ public class SelfUpdateTests
         string? extraVersion = null)
     {
         var handler = new MapHandler();
-        handler.Map[SelfUpdate.LatestReleaseUrl(Repo)] =
-            (HttpStatusCode.OK, Encoding.UTF8.GetBytes($$"""{"tag_name":"v{{latest}}"}"""), "application/json");
-
-        AddRelease(handler, dir, latest, payload);
+        var versions = extraVersion is null
+            ? new[] { "0.0.1", latest, "9.9.9-preview" }
+            : new[] { extraVersion, latest, "9.9.9-preview" };
+        AddIndex(handler, SelfUpdate.NugetFlatContainer, versions);
+        AddPackage(handler, dir, latest, payload, SelfUpdate.NugetFlatContainer, SelfUpdate.NugetRegistration);
         if (extraVersion is not null)
-            AddRelease(handler, dir, extraVersion, payload);
+            AddPackage(handler, dir, extraVersion, payload, SelfUpdate.NugetFlatContainer, SelfUpdate.NugetRegistration);
 
         return handler;
     }
+
+    static void AddIndex(MapHandler handler, string flat, params string[] versions)
+    {
+        var id = SelfUpdate.RidPackageId(Rid);
+        var json = "{\"versions\":[" + string.Join(',', versions.Select(v => "\"" + v + "\"")) + "]}";
+        handler.Map[SelfUpdate.FlatIndexUrl(flat, id)] =
+            (HttpStatusCode.OK, Encoding.UTF8.GetBytes(json), "application/json");
+    }
+
+    static void AddPackage(
+        MapHandler handler,
+        TempDir dir,
+        string version,
+        byte[] payload,
+        string flat,
+        string? registration,
+        string? rid = null)
+    {
+        rid ??= Rid;
+        var id = SelfUpdate.RidPackageId(rid);
+        var nupkgPath = RidNupkg.Write(Path.Combine(dir.Root, "nupkg-" + Guid.NewGuid().ToString("n")), rid, payload);
+        var nupkg = File.ReadAllBytes(nupkgPath);
+        handler.Map[SelfUpdate.NupkgUrl(flat, id, version)] =
+            (HttpStatusCode.OK, nupkg, "application/octet-stream");
+        if (registration is null)
+            return;
+
+        var catalog = CatalogUrl(id, version);
+        handler.Map[SelfUpdate.RegistrationLeafUrl(registration, id, version)] =
+            (HttpStatusCode.OK, Encoding.UTF8.GetBytes("{\"catalogEntry\":\"" + catalog + "\"}"), "application/json");
+        var hash = Convert.ToBase64String(SHA512.HashData(nupkg));
+        handler.Map[catalog] =
+            (HttpStatusCode.OK, Encoding.UTF8.GetBytes($$"""{"packageHash":"{{hash}}","packageHashAlgorithm":"SHA512"}"""), "application/json");
+    }
+
+    static string CatalogUrl(string packageId, string version)
+        => $"https://api.nuget.org/v3/catalog0/data/test/{packageId}.{version}.json";
 
     static void AddRelease(MapHandler handler, TempDir dir, string version, byte[] payload, string? tag = null)
     {
