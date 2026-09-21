@@ -141,6 +141,100 @@ public class ArgParserTests
         Assert.Contains("PACKAGE_NAME", parsed.Error);
     }
 
+    [Theory]
+    [InlineData("stop", "--version")]
+    [InlineData("stop", "--VERSION")]
+    public void Bare_version_after_a_package_is_forwarded_to_the_tool(params string[] args)
+    {
+        var parsed = ArgParser.Parse(args);
+        var viaSeparator = ArgParser.Parse(args[0], "--", args[1]);
+
+        Assert.True(parsed.Success);
+        Assert.False(parsed.ShowVersion);
+        Assert.Equal("stop", parsed.PackageId);
+        Assert.Null(parsed.Version);
+        Assert.Equal(viaSeparator.ForwardedArguments, parsed.ForwardedArguments);
+        Assert.Equal([args[1]], parsed.ForwardedArguments);
+    }
+
+    [Fact]
+    public void Bare_version_after_a_pinned_package_keeps_the_pin_and_forwards()
+    {
+        var parsed = ArgParser.Parse("stop@1.2.3", "--version");
+
+        Assert.True(parsed.Success);
+        Assert.Equal("stop", parsed.PackageId);
+        Assert.Equal("1.2.3", parsed.Version);
+        Assert.Equal(["--version"], parsed.ForwardedArguments);
+    }
+
+    [Fact]
+    public void Bare_version_after_other_options_still_forwards_only_the_flag()
+    {
+        var parsed = ArgParser.Parse(
+            "stop", "--prerelease", "--source", "https://feed.example", "--version");
+
+        Assert.True(parsed.Success);
+        Assert.False(parsed.ShowVersion);
+        Assert.Equal("stop", parsed.PackageId);
+        Assert.Null(parsed.Version);
+        Assert.True(parsed.Prerelease);
+        Assert.Equal(["https://feed.example"], parsed.Sources);
+        Assert.Equal(["--version"], parsed.ForwardedArguments);
+    }
+
+    [Fact]
+    public void Version_value_after_a_package_still_selects_that_version()
+    {
+        var parsed = ArgParser.Parse("stop", "--version", "1.2.3", "--", "--version");
+
+        Assert.True(parsed.Success);
+        Assert.Equal("stop", parsed.PackageId);
+        Assert.Equal("1.2.3", parsed.Version);
+        Assert.Equal(["--version"], parsed.ForwardedArguments);
+    }
+
+    [Fact]
+    public void Second_bare_version_is_forwarded_when_the_first_already_has_a_value()
+    {
+        var parsed = ArgParser.Parse("stop", "--version", "1.2.3", "--version");
+
+        Assert.True(parsed.Success);
+        Assert.Equal("1.2.3", parsed.Version);
+        Assert.Equal(["--version"], parsed.ForwardedArguments);
+    }
+
+    [Theory]
+    [InlineData("--yes", "--version")]
+    [InlineData("--update", "--version")]
+    [InlineData("--update", "1.2.3", "--version")]
+    public void Bare_version_without_a_package_still_requires_a_value(params string[] args)
+    {
+        var parsed = ArgParser.Parse(args);
+
+        Assert.False(parsed.Success);
+        Assert.False(parsed.ShowVersion);
+        Assert.Contains("Missing value for --version", parsed.Error);
+    }
+
+    [Fact]
+    public void Version_followed_by_another_token_is_still_that_tokens_value()
+    {
+        var parsed = ArgParser.Parse("stop", "--version", "--help");
+
+        Assert.False(parsed.Success);
+        Assert.Contains("Invalid version '--help'", parsed.Error);
+    }
+
+    [Fact]
+    public void Empty_version_assignment_is_still_missing_a_value()
+    {
+        var parsed = ArgParser.Parse("stop", "--version=");
+
+        Assert.False(parsed.Success);
+        Assert.Contains("Missing value for --version", parsed.Error);
+    }
+
     [Fact]
     public void Update_alone_is_a_self_update_to_latest()
     {

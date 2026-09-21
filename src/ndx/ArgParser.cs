@@ -4,7 +4,9 @@ namespace ndx;
 /// dnx.cmd-compatible argv split: first operand is PACKAGE[@VERSION], listed
 /// flags are consumed by ndx, everything else (including tokens after --) is
 /// forwarded to the child. <c>--update [VERSION]</c> is a standalone self-update.
-/// A lone <c>--version</c> prints the ndx version.
+/// A lone <c>--version</c> prints the ndx version. After a package id, a
+/// <c>--version</c> with no value is forwarded to the tool, as in
+/// <c>ndx stop -- --version</c>.
 /// </summary>
 public static class ArgParser
 {
@@ -106,7 +108,18 @@ public static class ArgParser
                 if (value is null)
                 {
                     if (i + 1 >= args.Count)
+                    {
+                        // `ndx stop --version` names the tool, not a package version.
+                        // A following token is still the value (`--version 1.2.3`,
+                        // or an invalid one such as `--version --help`).
+                        if (IsVersionOption(option) && packageId is not null && !update)
+                        {
+                            forwarded.Add(arg);
+                            continue;
+                        }
+
                         return Invocation.Failed($"Missing value for {option}.");
+                    }
 
                     value = args[++i];
                 }
@@ -332,10 +345,11 @@ public static class ArgParser
     static bool IsBareVersionFlag(string token)
     {
         var (option, inline) = SplitOption(token);
-        return option is not null
-            && option.Equals("--version", StringComparison.OrdinalIgnoreCase)
-            && inline is null;
+        return IsVersionOption(option) && inline is null;
     }
+
+    static bool IsVersionOption(string? option)
+        => option is not null && option.Equals("--version", StringComparison.OrdinalIgnoreCase);
 
     static (string? Name, string? InlineValue) SplitOption(string token)
     {
