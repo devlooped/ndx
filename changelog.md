@@ -1,16 +1,25 @@
 # Changelog
 
+## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-09-21)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.3...ci)
+
+## [v1.0.3](https://github.com/devlooped/ndx/tree/v1.0.3) (2026-09-21)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.2...v1.0.3)
+
+:sparkles: Implemented enhancements:
+
+- Install ndx from the NuGet RID package [\#31](https://github.com/devlooped/ndx/pull/31) (@kzu)
+- Forward a bare --version after the package to the tool [\#30](https://github.com/devlooped/ndx/pull/30) (@kzu)
+
 ## [v1.0.2](https://github.com/devlooped/ndx/tree/v1.0.2) (2026-09-21)
 
-[Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.0.2)
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.1...v1.0.2)
 
 :sparkles: Implemented enhancements:
 
 - Publish musl builds and glibc -gnu archive aliases [\#28](https://github.com/devlooped/ndx/pull/28) (@kzu)
-
-## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-08-27)
-
-[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.1...ci)
 
 ## [v1.0.1](https://github.com/devlooped/ndx/tree/v1.0.1) (2026-08-27)
 
