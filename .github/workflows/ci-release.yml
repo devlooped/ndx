@@ -37,9 +37,6 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-x64
-          - os: ubuntu-latest
-            rid: linux-musl-x64
-            musl: true
           - os: windows-latest
             rid: win-x64
     steps:
@@ -49,11 +46,9 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: ⚙ dotnet
-        if: matrix.musl != true
         uses: devlooped/actions-dotnet-env@v1
 
       - name: 📦 pack
-        if: matrix.musl != true
         shell: pwsh
         run: |
           dotnet pack src/ndx/ndx.csproj -c $env:Configuration -r ${{ matrix.rid }} -bl:"pack-${{ matrix.rid }}.binlog"
@@ -61,19 +56,6 @@ jobs:
           if ($nupkg.Count -ne 1) { throw "Expected one RID nupkg for ${{ matrix.rid }}, found $($nupkg.Count)." }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           dotnet run --project src/nativepack --no-launch-profile -c $env:Configuration -- $nupkg[0].FullName ${{ matrix.rid }} artifacts ci
-
-      - name: 📦 pack musl
-        if: matrix.musl == true
-        shell: bash
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE":/src \
-            -w /src \
-            -e Configuration \
-            -e VersionLabel \
-            -e GITHUB_RUN_NUMBER \
-            mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot \
-            sh .github/scripts/pack-musl.sh '${{ matrix.rid }}' ci
 
       - name: 📤 artifact
         uses: actions/upload-artifact@v4
