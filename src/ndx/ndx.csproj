@@ -13,7 +13,7 @@
     <ToolCommandName>ndx</ToolCommandName>
     <Description>dnx for native tools packaged as NuGet packages.</Description>
     <RollForward>LatestMajor</RollForward>
-    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64;any</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;linux-musl-arm64;osx-x64;osx-arm64;any</RuntimeIdentifiers>
     <_NdxWindows>false</_NdxWindows>
     <_NdxWindows Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</_NdxWindows>
     <_NdxWindows Condition="$(RuntimeIdentifier.StartsWith('win'))">true</_NdxWindows>

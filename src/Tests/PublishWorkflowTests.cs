@@ -6,6 +6,8 @@ public class PublishWorkflowTests
     [
         ("ubuntu-latest", "linux-x64"),
         ("ubuntu-24.04-arm", "linux-arm64"),
+        ("ubuntu-latest", "linux-musl-x64"),
+        ("ubuntu-24.04-arm", "linux-musl-arm64"),
         ("windows-latest", "win-x64"),
         ("windows-11-arm", "win-arm64"),
         ("macos-15-intel", "osx-x64"),
@@ -37,6 +39,10 @@ public class PublishWorkflowTests
         Assert.Contains("dotnet pack src/ndx/ndx.csproj", yml);
         Assert.Contains("-r ${{ matrix.rid }}", yml);
         Assert.Contains("src/nativepack", yml);
+        Assert.Contains("linux-musl-x64", yml);
+        Assert.Contains("musl: true", yml);
+        Assert.Contains(".github/scripts/pack-musl.sh", yml);
+        Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot", yml);
         Assert.DoesNotContain("dotnet publish", yml);
         Assert.DoesNotContain("dotnet nuget push", yml);
         Assert.DoesNotContain("sleet push", yml);
@@ -52,7 +58,7 @@ public class PublishWorkflowTests
     }
 
     [Fact]
-    public void Release_workflow_builds_the_six_rid_matrix_and_attaches_archives()
+    public void Release_workflow_builds_the_rid_matrix_and_attaches_archives()
     {
         var yml = File.ReadAllText(FindPublishWorkflow());
 
@@ -78,6 +84,13 @@ public class PublishWorkflowTests
         Assert.Contains("sleet push", yml);
         Assert.Contains("SLEET_CONNECTION", yml);
         Assert.Contains("name: package-${{ matrix.rid }}", yml);
+        Assert.Contains("matrix.musl != true", yml);
+        Assert.Contains(".github/scripts/pack-musl.sh", yml);
+        Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot", yml);
+        Assert.Contains("linux-musl-x64", yml);
+        Assert.Contains("linux-musl-arm64", yml);
+        // NuGet and Sleet both push musl RID packages before the pointer.
+        Assert.Equal(2, yml.Split("linux-musl-x64|linux-musl-arm64").Length - 1);
         Assert.Contains("name: package-any", yml);
 
         var runtimeNuget = yml.IndexOf("foreach ($package in $runtimePackages)", StringComparison.Ordinal);

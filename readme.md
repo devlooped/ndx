@@ -38,6 +38,12 @@ irm https://github.com/devlooped/ndx/releases/latest/download/install.ps1 | iex
 > Alternatively (perhaps of debatable utility), you can install using the .NET SDK too:
 > `dotnet tool install -g ndx`
 
+The Linux archives are glibc builds. Each is also published as
+`ndx-<version>-linux-<arch>-gnu.tar.gz` so an installer can see that it needs
+GNU libc. Alpine and other musl systems get `linux-musl-x64` / `linux-musl-arm64`,
+both as release archives (`install.sh` selects them) and as NuGet RID packages,
+so `dotnet tool install -g ndx` does too.
+
 
 ## Update
 

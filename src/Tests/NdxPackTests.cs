@@ -9,7 +9,7 @@ namespace Tests;
 public class NdxPackTests
 {
     static readonly string[] ExpectedRids =
-        ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64", "any"];
+        ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "linux-musl-x64", "linux-musl-arm64", "osx-x64", "osx-arm64", "any"];
 
     [Fact]
     public void Pack_without_runtime_identifier_is_a_pointer_dotnet_tool()
