@@ -50,6 +50,19 @@ public class NativePackerTests
         var result = NativePacker.Pack(nupkg, rid, dir.Output, "4.5.6");
 
         Assert.Equal($"ndx-4.5.6-{rid}.tar.gz", Path.GetFileName(result.ArchivePath));
+        if (NativePacker.IsGlibcLinuxRid(rid))
+        {
+            Assert.Equal(NativePacker.GnuArchiveFileName(rid, "4.5.6"), Path.GetFileName(result.GnuArchivePath));
+            Assert.Equal(File.ReadAllBytes(result.ArchivePath), File.ReadAllBytes(result.GnuArchivePath!));
+            var gnuSha = File.ReadAllText(result.GnuSha256Path!).Trim();
+            Assert.StartsWith(result.Sha256, gnuSha, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith(Path.GetFileName(result.GnuArchivePath)!, gnuSha);
+        }
+        else
+        {
+            Assert.Null(result.GnuArchivePath);
+            Assert.False(File.Exists(Path.Combine(dir.Output, $"ndx-4.5.6-{rid}-gnu.tar.gz")));
+        }
 
         using var file = File.OpenRead(result.ArchivePath);
         using var gzip = new GZipStream(file, CompressionMode.Decompress);
@@ -63,6 +76,17 @@ public class NativePackerTests
         Assert.Null(tar.GetNextEntry());
 
         AssertSha256File(result);
+    }
+
+    [Theory]
+    [InlineData("linux-x64", "ndx-1.0.1-linux-x64-gnu.tar.gz")]
+    [InlineData("linux-arm64", "ndx-1.0.1-linux-arm64-gnu.tar.gz")]
+    public void Glibc_linux_archive_is_also_copied_with_a_gnu_suffix(string rid, string gnuName)
+    {
+        Assert.True(NativePacker.IsGlibcLinuxRid(rid));
+        Assert.Equal(gnuName, NativePacker.GnuArchiveFileName(rid, "1.0.1"));
+        Assert.False(NativePacker.IsGlibcLinuxRid("linux-musl-" + rid["linux-".Length..]));
+        Assert.False(NativePacker.IsGlibcLinuxRid("osx-arm64"));
     }
 
     [Fact]

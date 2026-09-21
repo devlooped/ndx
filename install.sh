@@ -10,6 +10,23 @@ ARCHIVE="${NDX_ARCHIVE:-}"
 RID="${NDX_RID:-}"
 SKIP_PATH="${NDX_SKIP_PATH:-0}"
 
+is_musl() {
+    # Alpine and other musl hosts. gcompat may also add a glibc loader; the musl
+    # loader is still the host libc, so prefer the musl build when it is present.
+    if [ -f /etc/alpine-release ]; then
+        return 0
+    fi
+    for loader in /lib/ld-musl-*.so*; do
+        if [ -e "$loader" ]; then
+            return 0
+        fi
+    done
+    if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+        return 0
+    fi
+    return 1
+}
+
 detect_rid() {
     os=$(uname -s | tr '[:upper:]' '[:lower:]')
     arch=$(uname -m | tr '[:upper:]' '[:lower:]')
@@ -24,7 +41,13 @@ detect_rid() {
     esac
 
     case "$os" in
-        linux) echo "linux-${arch}" ;;
+        linux)
+            if is_musl; then
+                echo "linux-musl-${arch}"
+            else
+                echo "linux-${arch}"
+            fi
+            ;;
         darwin) echo "osx-${arch}" ;;
         mingw*|msys*|cygwin*) echo "win-${arch}" ;;
         *)

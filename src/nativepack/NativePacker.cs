@@ -21,6 +21,27 @@ public static class NativePacker
             ? $"ndx-{version}-{rid}.zip"
             : $"ndx-{version}-{rid}.tar.gz";
 
+    /// <summary>
+    /// glibc Native AOT builds (<c>linux-x64</c>, <c>linux-arm64</c>). Not musl.
+    /// </summary>
+    public static bool IsGlibcLinuxRid(string rid)
+        => rid.Equals("linux-x64", StringComparison.OrdinalIgnoreCase)
+        || rid.Equals("linux-arm64", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Same archive as <see cref="ArchiveFileName"/> with <c>-gnu</c> before the extension.
+    /// Webi's classifier treats <c>gnu</c> as requiring GNU libc.
+    /// </summary>
+    public static string GnuArchiveFileName(string rid, string version)
+    {
+        const string extension = ".tar.gz";
+        var name = ArchiveFileName(rid, version);
+        if (!name.EndsWith(extension, StringComparison.Ordinal))
+            throw new ArgumentException($"A -gnu alias is only published for tar.gz archives ('{rid}').", nameof(rid));
+
+        return string.Concat(name.AsSpan(0, name.Length - extension.Length), "-gnu", extension);
+    }
+
     public static NativePackResult Pack(
         string nupkgPath,
         string rid,
@@ -50,10 +71,34 @@ public static class NativePacker
         var sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archivePath)))
             .ToLowerInvariant();
         var sha256Path = archivePath + ".sha256";
-        File.WriteAllText(sha256Path, $"{sha256}  {archiveName}{Environment.NewLine}");
+        File.WriteAllText(sha256Path, ChecksumLine(sha256, archiveName));
 
-        return new NativePackResult(archivePath, sha256Path, sha256, binaryName);
+        string? gnuArchivePath = null;
+        string? gnuSha256Path = null;
+        if (IsGlibcLinuxRid(rid))
+            (gnuArchivePath, gnuSha256Path) = CopyGnuAlias(archivePath, sha256, rid, version);
+
+        return new NativePackResult(archivePath, sha256Path, sha256, binaryName, gnuArchivePath, gnuSha256Path);
     }
+
+    /// <summary>
+    /// Byte-for-byte copy named <c>ndx-VER-linux-ARCH-gnu.tar.gz</c>.
+    /// Webi reads <c>gnu</c> as GNU libc. install.sh keeps the unsuffixed name.
+    /// </summary>
+    static (string ArchivePath, string Sha256Path) CopyGnuAlias(string archivePath, string sha256, string rid, string version)
+    {
+        var gnuName = GnuArchiveFileName(rid, version);
+        var directory = Path.GetDirectoryName(archivePath)
+            ?? throw new InvalidOperationException($"Archive '{archivePath}' has no directory.");
+        var gnuArchivePath = Path.Combine(directory, gnuName);
+        File.Copy(archivePath, gnuArchivePath, overwrite: true);
+        var gnuSha256Path = gnuArchivePath + ".sha256";
+        File.WriteAllText(gnuSha256Path, ChecksumLine(sha256, gnuName));
+        return (gnuArchivePath, gnuSha256Path);
+    }
+
+    static string ChecksumLine(string sha256, string fileName)
+        => $"{sha256}  {fileName}{Environment.NewLine}";
 
     static byte[] ReadNativeBinary(string nupkgPath, string rid, string binaryName)
     {
@@ -143,4 +188,6 @@ public sealed record NativePackResult(
     string ArchivePath,
     string Sha256Path,
     string Sha256,
-    string BinaryName);
+    string BinaryName,
+    string? GnuArchivePath = null,
+    string? GnuSha256Path = null);

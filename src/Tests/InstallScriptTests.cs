@@ -23,11 +23,17 @@ public class InstallScriptTests
         var ps = File.ReadAllText(Path.Combine(root, "install.ps1"));
 
         Assert.Contains("linux-${arch}", sh);
+        Assert.Contains("linux-musl-${arch}", sh);
+        Assert.Contains("/etc/alpine-release", sh);
+        Assert.Contains("/lib/ld-musl-", sh);
         Assert.Contains("osx-${arch}", sh);
         Assert.Contains("win-${arch}", sh);
         Assert.Contains("win-$archName", ps);
         Assert.Contains("osx-$archName", ps);
         Assert.Contains("linux-$archName", ps);
+        Assert.Contains("linux-musl-$archName", ps);
+        Assert.Contains("/etc/alpine-release", ps);
+        Assert.Contains("ld-musl-", ps);
 
         foreach (var rid in new[] { "linux-x64", "linux-arm64", "win-x64", "win-arm64", "osx-x64", "osx-arm64" })
         {

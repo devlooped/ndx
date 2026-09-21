@@ -19,6 +19,24 @@ public class SelfUpdateTests
         => Assert.Equal(expected, SelfUpdate.FormatVersion(informational));
 
     [Fact]
+    public void HasMuslLoader_recognizes_alpine_release_or_the_musl_loader()
+    {
+        using var dir = new TempDir();
+        Assert.False(SelfUpdate.HasMuslLoader(dir.Root));
+
+        Directory.CreateDirectory(Path.Combine(dir.Root, "etc"));
+        File.WriteAllText(Path.Combine(dir.Root, "etc", "alpine-release"), "3.22.0\n");
+        Assert.True(SelfUpdate.HasMuslLoader(dir.Root));
+        File.Delete(Path.Combine(dir.Root, "etc", "alpine-release"));
+        Assert.False(SelfUpdate.HasMuslLoader(dir.Root));
+
+        var lib = Path.Combine(dir.Root, "lib");
+        Directory.CreateDirectory(lib);
+        File.WriteAllBytes(Path.Combine(lib, "ld-musl-x86_64.so.1"), [0]);
+        Assert.True(SelfUpdate.HasMuslLoader(dir.Root));
+    }
+
+    [Fact]
     public void FormatVersion_reads_assembly_informational_version()
     {
         var formatted = SelfUpdate.FormatVersion();

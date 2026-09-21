@@ -162,9 +162,30 @@ public static class SelfUpdate
         if (OperatingSystem.IsMacOS())
             return $"osx-{arch}";
         if (OperatingSystem.IsLinux())
-            return $"linux-{arch}";
+            return HasMuslLoader() ? $"linux-musl-{arch}" : $"linux-{arch}";
 
         throw new InvalidOperationException("ndx: unsupported OS.");
+    }
+
+    /// <summary>
+    /// True when <paramref name="root"/> looks like a musl system (Alpine's
+    /// <c>/etc/alpine-release</c>, or musl's loader <c>/lib/ld-musl-*.so*</c>).
+    /// A glibc dynamic linker installed by gcompat does not hide the musl loader.
+    /// </summary>
+    public static bool HasMuslLoader(string root = "/")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        if (File.Exists(Path.Combine(root, "etc", "alpine-release")))
+            return true;
+
+        var lib = Path.Combine(root, "lib");
+        if (!Directory.Exists(lib))
+            return false;
+
+        foreach (var _ in Directory.EnumerateFiles(lib, "ld-musl-*.so*"))
+            return true;
+
+        return false;
     }
 
     public static string LatestReleaseUrl(string repo)

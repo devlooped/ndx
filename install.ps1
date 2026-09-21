@@ -28,7 +28,16 @@ function Get-NdxRuntimeIdentifier {
 
     if (Get-Variable IsMacOS -ErrorAction SilentlyContinue) {
         if ($IsMacOS) { return "osx-$archName" }
-        if ($IsLinux) { return "linux-$archName" }
+        if ($IsLinux) {
+            # Same signals as install.sh: Alpine, or musl's loader. gcompat does not hide it.
+            $musl = (Test-Path -LiteralPath '/etc/alpine-release') -or
+                (@(Get-ChildItem -Path '/lib' -Filter 'ld-musl-*.so*' -ErrorAction SilentlyContinue).Count -gt 0)
+            if (-not $musl -and (Get-Command ldd -ErrorAction SilentlyContinue)) {
+                $musl = ((& ldd --version 2>&1 | Out-String) -match 'musl')
+            }
+            if ($musl) { return "linux-musl-$archName" }
+            return "linux-$archName"
+        }
     }
 
     throw "ndx: unsupported OS"

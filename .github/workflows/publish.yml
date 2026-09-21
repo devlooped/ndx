@@ -1,5 +1,8 @@
-# Builds Native AOT binaries for the six-RID matrix and attaches
+# Builds Native AOT binaries for the RID matrix and attaches
 # archives + SHA256 checksums + install/uninstall scripts to the GitHub Release.
+# glibc linux archives are also copied as *-gnu.tar.gz (Webi). musl RIDs are
+# packed in an Alpine SDK container and published both as release assets and
+# as NuGet RID packages (ndx.linux-musl-x64 / ndx.linux-musl-arm64).
 # Also packs RID-specific plus `any` nupkgs and the top-level pointer, then
 # pushes runtime nupkgs before the pointer to nuget.org (non-prerelease) and Sleet.
 
@@ -32,6 +35,12 @@ jobs:
             rid: linux-x64
           - os: ubuntu-24.04-arm
             rid: linux-arm64
+          - os: ubuntu-latest
+            rid: linux-musl-x64
+            musl: true
+          - os: ubuntu-24.04-arm
+            rid: linux-musl-arm64
+            musl: true
           - os: windows-latest
             rid: win-x64
           - os: windows-11-arm
@@ -45,9 +54,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: ⚙ dotnet
+        if: matrix.musl != true
         uses: devlooped/actions-dotnet-env@v1
 
       - name: 📦 pack
+        if: matrix.musl != true
         shell: pwsh
         run: |
           $version = '${{ github.event.release.tag_name }}' -replace '^v',''
@@ -56,6 +67,21 @@ jobs:
           if ($nupkg.Count -ne 1) { throw "Expected one RID nupkg for ${{ matrix.rid }}, found $($nupkg.Count)." }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           dotnet run --project src/nativepack --no-launch-profile -c $env:Configuration -- $nupkg[0].FullName ${{ matrix.rid }} artifacts $version
+
+      - name: 📦 pack musl
+        if: matrix.musl == true
+        shell: bash
+        run: |
+          version='${{ github.event.release.tag_name }}'
+          version="${version#v}"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src \
+            -e Configuration \
+            -e VersionLabel \
+            -e GITHUB_RUN_NUMBER \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot \
+            sh .github/scripts/pack-musl.sh '${{ matrix.rid }}' "$version"
 
       - name: 📤 artifact
         uses: actions/upload-artifact@v4
@@ -178,7 +204,7 @@ jobs:
         shell: pwsh
         run: |
           $packages = @(Get-ChildItem bin -Filter *.nupkg | Where-Object Name -NotLike '*.symbols.nupkg' | Sort-Object Name)
-          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
+          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
           $runtimePackages = @($packages | Where-Object Name -Match $runtimePackagePattern)
           $pointerPackages = @($packages | Where-Object Name -NotMatch $runtimePackagePattern)
 
@@ -198,7 +224,7 @@ jobs:
         shell: pwsh
         run: |
           $packages = @(Get-ChildItem bin -Filter *.nupkg | Where-Object Name -NotLike '*.symbols.nupkg' | Sort-Object Name)
-          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
+          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
           $runtimePackages = @($packages | Where-Object Name -Match $runtimePackagePattern)
           $pointerPackages = @($packages | Where-Object Name -NotMatch $runtimePackagePattern)
 
