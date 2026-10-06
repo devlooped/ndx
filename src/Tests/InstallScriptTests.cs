@@ -135,6 +135,83 @@ public class InstallScriptTests
     }
 
     [Fact]
+    public void Powershell_scripts_qualify_runtimeinformation_with_mscorlib()
+    {
+        var root = FindRepoRoot();
+        const string lookup = "[System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture";
+        Assert.Contains(lookup, File.ReadAllText(Path.Combine(root, "install.ps1")));
+        Assert.Contains(lookup, File.ReadAllText(Path.Combine(root, "uninstall.ps1")));
+    }
+
+    [Fact]
+    public void Windows_powershell_resolves_architecture_with_psreadline_2_loaded()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = GetFullPath("powershell");
+        Assert.True(powershell is not null, "Windows PowerShell is required");
+
+        var root = FindRepoRoot();
+        var assignment = File.ReadLines(Path.Combine(root, "install.ps1"))
+            .Single(line => line.Contains("::OSArchitecture", StringComparison.Ordinal))
+            .Trim();
+
+        var module = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "WindowsPowerShell", "Modules", "PSReadLine", "2.0.0", "PSReadLine.psd1");
+        var import = File.Exists(module)
+            ? $"Import-Module -Name '{module}'"
+            : "Import-Module PSReadLine -ErrorAction SilentlyContinue";
+
+        var snippet = Path.Combine(Path.GetTempPath(), "ndx-arch-" + Guid.NewGuid().ToString("n") + ".ps1");
+        var probe = Path.Combine(Path.GetTempPath(), "ndx-arch-probe-" + Guid.NewGuid().ToString("n") + ".ps1");
+        // Parse the lookup only after PSReadLine is loaded, the same order as irm | iex
+        // in a console that already imported PSReadLine 2.0.
+        File.WriteAllText(snippet, assignment + """
+
+            $name = switch ($arch) {
+                'X64' { 'x64' }
+                'Arm64' { 'arm64' }
+                default { throw "ndx: unsupported architecture '$arch'" }
+            }
+            Write-Output $name
+            """);
+        File.WriteAllText(probe, $$"""
+            $ErrorActionPreference = 'Stop'
+            {{import}}
+            Invoke-Expression (Get-Content -Raw '{{snippet}}')
+            """);
+
+        try
+        {
+            var start = new ProcessStartInfo
+            {
+                FileName = powershell,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            start.ArgumentList.Add("-NoProfile");
+            start.ArgumentList.Add("-File");
+            start.ArgumentList.Add(probe);
+
+            using var process = Process.Start(start) ?? throw new InvalidOperationException("failed to start PowerShell");
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.True(process.ExitCode == 0, $"architecture probe failed ({process.ExitCode}).{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+            var arch = stdout.Trim();
+            Assert.True(arch is "x64" or "arm64", stdout);
+        }
+        finally
+        {
+            File.Delete(snippet);
+            File.Delete(probe);
+        }
+    }
+
+    [Fact]
     public void Shell_installer_writes_a_guarded_path_block_into_zshrc()
     {
         var bash = FindBash();

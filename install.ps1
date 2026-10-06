@@ -19,7 +19,10 @@ $NugetReg = if ($env:NDX_NUGET_REG) { $env:NDX_NUGET_REG } else { 'https://api.n
 $BlobFlat = if ($env:NDX_BLOB_FLAT) { $env:NDX_BLOB_FLAT } else { 'https://kzu.blob.core.windows.net/nuget/flatcontainer' }
 
 function Get-NdxRuntimeIdentifier {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    # PSReadLine 2.0, shipped with Windows PowerShell 5.1, defines its own
+    # RuntimeInformation that has no OSArchitecture. Qualifying mscorlib
+    # selects the real type there, and PowerShell 7 still type-forwards it.
+    $arch = [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture
     $archName = switch ($arch) {
         'X64' { 'x64' }
         'Arm64' { 'arm64' }
