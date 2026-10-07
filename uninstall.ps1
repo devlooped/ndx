@@ -11,7 +11,10 @@ $Rid = $env:NDX_RID
 $SkipPath = $env:NDX_SKIP_PATH -eq '1'
 
 function Get-NdxRuntimeIdentifier {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    # PSReadLine 2.0, shipped with Windows PowerShell 5.1, defines its own
+    # RuntimeInformation that has no OSArchitecture. Qualifying mscorlib
+    # selects the real type there, and PowerShell 7 still type-forwards it.
+    $arch = [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture
     $archName = switch ($arch) {
         'X64' { 'x64' }
         'Arm64' { 'arm64' }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.4](https://github.com/devlooped/ndx/tree/v1.0.4) (2026-10-06)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.0.4)
+
+:bug: Fixed bugs:
+
+- Fix install on Windows PowerShell 5.1 when PSReadLine shadows OSArchitecture [\#37](https://github.com/devlooped/ndx/pull/37) (@kzu)
+
 ## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-09-21)
 
 [Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.3...ci)

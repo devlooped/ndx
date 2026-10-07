@@ -39,10 +39,11 @@ public class PublishWorkflowTests
         Assert.Contains("dotnet pack src/ndx/ndx.csproj", yml);
         Assert.Contains("-r ${{ matrix.rid }}", yml);
         Assert.Contains("src/nativepack", yml);
-        Assert.Contains("linux-musl-x64", yml);
-        Assert.Contains("musl: true", yml);
-        Assert.Contains(".github/scripts/pack-musl.sh", yml);
-        Assert.Contains("mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot", yml);
+        // CI builds are glibc Linux and Windows only. Musl stays on the versioned release.
+        Assert.DoesNotContain("linux-musl-", yml);
+        Assert.DoesNotContain("musl: true", yml);
+        Assert.DoesNotContain(".github/scripts/pack-musl.sh", yml);
+        Assert.DoesNotContain("mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-aot", yml);
         Assert.DoesNotContain("dotnet publish", yml);
         Assert.DoesNotContain("dotnet nuget push", yml);
         Assert.DoesNotContain("sleet push", yml);
