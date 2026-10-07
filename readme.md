@@ -35,6 +35,8 @@ Windows (PowerShell):
 irm https://github.com/devlooped/ndx/releases/latest/download/install.ps1 | iex
 ```
 
+> Or via [webi](https://webinstall.dev/ndx): `curl -sS https://webi.sh/ndx | sh`
+>
 > Alternatively (perhaps of debatable utility), you can install using the .NET SDK too:
 > `dotnet tool install -g ndx`
 
