@@ -92,13 +92,13 @@ public static class App
 
         try
         {
-            using var http = CreateHttpClient(host);
+            var (sources, credentials) = PackageSources.Resolve(invocation, host.WorkingDirectory);
+            using var http = CreateHttpClient(host, credentials);
 
             if (invocation.Update)
                 return await SelfUpdate.RunAsync(invocation, host, http, cancellationToken).ConfigureAwait(false);
 
             var log = IsDetailed(invocation.Verbosity) ? host.Out : null;
-            var sources = PackageSources.Resolve(invocation, host.WorkingDirectory);
             var progress = host.Progress ?? (host.ShowProgress ? host.Error : null);
             var feed = new PackageFeed(http, invocation.IgnoreFailedSources, log, progress);
             var muxer = host.DotnetMuxer ?? DotnetMuxer.Resolve();
@@ -134,13 +134,18 @@ public static class App
         }
     }
 
-    static HttpClient CreateHttpClient(NdxHost host)
-        => host.HttpHandler is { } handler
-            ? new HttpClient(handler, disposeHandler: false)
-            : new HttpClient(new SocketsHttpHandler
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
+    static HttpClient CreateHttpClient(NdxHost host, IReadOnlyList<SourceCredential> credentials)
+    {
+        var handler = host.HttpHandler ?? new SocketsHttpHandler
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        };
+
+        if (credentials.Count > 0)
+            handler = new SourceCredentialsHandler(credentials) { InnerHandler = handler };
+
+        return new HttpClient(handler, disposeHandler: host.HttpHandler is null);
+    }
 
     static bool IsDetailed(string? verbosity)
         => verbosity?.ToLowerInvariant() is "detailed" or "diagnostic" or "d" or "diag";

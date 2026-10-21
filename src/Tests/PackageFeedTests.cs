@@ -281,6 +281,54 @@ public class PackageFeedTests
     }
 
     [Fact]
+    public async Task Config_credentials_authenticate_feed_requests_with_source_override()
+    {
+        using var packages = new TempNupkgs();
+        var handler = MapFeed(packages);
+        var config = Path.Combine(packages.Root, "auth.config");
+        File.WriteAllText(config, $"""
+            <configuration>
+              <packageSources>
+                <add key="Private Feed" value="{Source}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <Private_x0020_Feed>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="%NDX_TEST_FEED_PAT%" />
+                </Private_x0020_Feed>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+        Environment.SetEnvironmentVariable("NDX_TEST_FEED_PAT", "s3cret");
+        using var error = new StringWriter();
+        var host = new NdxHost
+        {
+            HttpHandler = handler,
+            Error = error,
+            Out = new StringWriter(),
+            StoreDirectory = NewStore(),
+            ProcessRunner = new RecordingProcessRunner { ExitCode = 0 },
+            WorkingDirectory = packages.Root,
+        };
+
+        try
+        {
+            var code = await App.RunAsync(
+                [PackageId + "@" + VersionText, "--yes", "--source", Source, "--configfile", config], host);
+
+            Assert.Equal(0, code);
+            Assert.Equal("", error.ToString());
+            var expected = "Basic " + Convert.ToBase64String("user:s3cret"u8.ToArray());
+            Assert.Equal(expected, handler.Authorizations[Source]);
+            Assert.Equal(expected, handler.Authorizations[NupkgUrl(PackageId)]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("NDX_TEST_FEED_PAT", null);
+        }
+    }
+
+    [Fact]
     public async Task Http_download_succeeds_when_catalog_size_lookup_fails()
     {
         using var packages = new TempNupkgs();
@@ -458,11 +506,13 @@ public class PackageFeedTests
         public Dictionary<string, Func<(HttpStatusCode Status, byte[] Body)>> Override { get; } = new(StringComparer.Ordinal);
         public HashSet<string> OmitContentLength { get; } = new(StringComparer.Ordinal);
         public List<string> Hits { get; } = [];
+        public Dictionary<string, string?> Authorizations { get; } = new(StringComparer.Ordinal);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var url = request.RequestUri?.ToString() ?? "";
             Hits.Add(url);
+            Authorizations[url] = request.Headers.Authorization?.ToString();
 
             if (Override.TryGetValue(url, out var factory))
             {
