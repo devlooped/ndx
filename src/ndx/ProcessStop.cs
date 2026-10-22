@@ -1,12 +1,15 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace ndx;
 
 /// <summary>
 /// Gracefully stops a child we started: SIGINT / Ctrl+C, then Windows
 /// <c>WM_CLOSE</c> if the tool is a GUI, then <see cref="Process.Kill()"/> after a timeout.
+/// A NeoAstra app is closed through its unowned top-level <c>NeoAstra.Window</c> frames only.
+/// Any other GUI keeps the generic close.
 /// In-process <c>GenerateConsoleCtrlEvent</c> is enough — the parent survives when
 /// <see cref="ShutdownScope"/> cancels the Ctrl+C. No stopr helper.
 /// </summary>
@@ -15,6 +18,8 @@ public static class ProcessStop
     const uint CtrlCEvent = 0;
     const uint WmClose = 0x0010;
     const uint GaRoot = 2;
+    const uint GwOwner = 4;
+    const string NeoAstraWindowClass = "NeoAstra.Window";
 
     /// <summary>
     /// Asks <paramref name="process"/> to exit. Does not wait.
@@ -82,6 +87,15 @@ public static class ProcessStop
         if (process.HasExited)
             return true;
 
+        var windows = CollectWindows((uint)process.Id);
+        if (TrySelectNeoAstraFrames(windows, out var frames))
+        {
+            foreach (var hWnd in frames)
+                PostMessage(hWnd, WmClose, nint.Zero, nint.Zero);
+
+            return true;
+        }
+
         var posted = false;
         if (process.MainWindowHandle != nint.Zero && process.CloseMainWindow())
         {
@@ -91,29 +105,64 @@ public static class ProcessStop
                 return true;
         }
 
-        var state = new GuiCloseState((uint)process.Id);
+        if (process.MainWindowHandle != nint.Zero)
+            windows.Add(process.MainWindowHandle);
+
+        foreach (var hWnd in windows)
+        {
+            if (PostMessage(hWnd, WmClose, nint.Zero, nint.Zero))
+                posted = true;
+        }
+
+        return posted;
+    }
+
+    [SupportedOSPlatform("windows")]
+    static HashSet<nint> CollectWindows(uint pid)
+    {
+        var state = new GuiCloseState(pid);
         var handle = GCHandle.Alloc(state);
         try
         {
-            if (process.MainWindowHandle != nint.Zero)
-                state.Windows.Add(process.MainWindowHandle);
-
             var statePtr = GCHandle.ToIntPtr(handle);
             EnumWindows(EnumWindowsByPid, statePtr);
             EnumWindows(EnumHostedParent, statePtr);
-
-            foreach (var hWnd in state.Windows)
-            {
-                if (PostMessage(hWnd, WmClose, nint.Zero, nint.Zero))
-                    posted = true;
-            }
+            return state.Windows;
         }
         finally
         {
             handle.Free();
         }
+    }
 
-        return posted;
+    // NeoAstra turns WM_CLOSE on an unowned top-level NeoAstra.Window into a cancelable user close.
+    // An owned window of that class is a dialog. The same message on its dispatcher, caption, or
+    // WebView child destroys that window instead. Filtering applies only once such a frame is
+    // present; every other GUI is closed as before.
+    [SupportedOSPlatform("windows")]
+    static bool TrySelectNeoAstraFrames(HashSet<nint> windows, out List<nint> frames)
+    {
+        frames = [];
+        var sawNeoAstraWindow = false;
+        foreach (var hWnd in windows)
+        {
+            if (!HasClass(hWnd, NeoAstraWindowClass))
+                continue;
+
+            sawNeoAstraWindow = true;
+            if (GetAncestor(hWnd, GaRoot) == hWnd && GetWindow(hWnd, GwOwner) == nint.Zero)
+                frames.Add(hWnd);
+        }
+
+        return sawNeoAstraWindow;
+    }
+
+    [SupportedOSPlatform("windows")]
+    static bool HasClass(nint hWnd, string className)
+    {
+        var name = new StringBuilder(256);
+        return GetClassName(hWnd, name, name.Capacity) > 0
+            && string.Equals(name.ToString(), className, StringComparison.Ordinal);
     }
 
     [SupportedOSPlatform("windows")]
@@ -173,6 +222,12 @@ public static class ProcessStop
 
     [DllImport("user32.dll")]
     private static extern nint GetAncestor(nint hwnd, uint gaFlags);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetWindow(nint hWnd, uint uCmd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(nint hWnd, StringBuilder lpClassName, int nMaxCount);
 #endif
 }
 
