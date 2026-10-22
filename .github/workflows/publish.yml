@@ -5,6 +5,7 @@
 # as NuGet RID packages (ndx.linux-musl-x64 / ndx.linux-musl-arm64).
 # Also packs RID-specific plus `any` nupkgs and the top-level pointer, then
 # pushes runtime nupkgs before the pointer to nuget.org (non-prerelease) and Sleet.
+# After a stable release is published, submits a Devlooped.ndx update to WinGet.
 
 name: publish
 on:
@@ -250,3 +251,18 @@ jobs:
 
           sleet push $runtimePath --config none -f --verbose -p "SLEET_FEED_CONTAINER=nuget" -p "SLEET_FEED_CONNECTIONSTRING=$env:SLEET_CONNECTION" -p "SLEET_FEED_TYPE=azure"
           sleet push $pointerPath --config none -f --verbose -p "SLEET_FEED_CONTAINER=nuget" -p "SLEET_FEED_CONNECTIONSTRING=$env:SLEET_CONNECTION" -p "SLEET_FEED_TYPE=azure"
+
+  winget:
+    needs: publish
+    if: github.event.action == 'released' && github.event.release.tag_name != 'ci'
+    runs-on: ubuntu-latest
+    steps:
+      # Runs after publish has attached the Windows zips.
+      # winget-releaser forwards `token` to Komac as GITHUB_TOKEN.
+      # The value is the GH_TOKEN secret, which can open the winget-pkgs pull request.
+      - name: 🚀 winget
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Devlooped.ndx
+          installers-regex: 'ndx-.+-win-.+\.zip$'
+          token: ${{ secrets.GH_TOKEN }}

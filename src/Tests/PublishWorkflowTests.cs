@@ -47,6 +47,7 @@ public class PublishWorkflowTests
         Assert.DoesNotContain("dotnet publish", yml);
         Assert.DoesNotContain("dotnet nuget push", yml);
         Assert.DoesNotContain("sleet push", yml);
+        Assert.DoesNotContain("winget-releaser", yml);
         Assert.DoesNotContain("osx-", yml);
         Assert.DoesNotContain("macos-", yml);
         Assert.DoesNotContain("arm64", yml);
@@ -93,6 +94,13 @@ public class PublishWorkflowTests
         // NuGet and Sleet both push musl RID packages before the pointer.
         Assert.Equal(2, yml.Split("linux-musl-x64|linux-musl-arm64").Length - 1);
         Assert.Contains("name: package-any", yml);
+        Assert.Contains("needs: publish", yml);
+        Assert.Contains("github.event.action == 'released'", yml);
+        Assert.Contains("vedantmgoyal9/winget-releaser@v2", yml);
+        Assert.Contains("identifier: Devlooped.ndx", yml);
+        Assert.Contains("installers-regex: 'ndx-.+-win-.+\\.zip$'", yml);
+        Assert.Contains("token: ${{ secrets.GH_TOKEN }}", yml);
+        Assert.DoesNotContain("secrets.GITHUB_TOKEN", yml);
 
         var runtimeNuget = yml.IndexOf("foreach ($package in $runtimePackages)", StringComparison.Ordinal);
         var pointerNuget = yml.IndexOf("foreach ($package in $pointerPackages)", StringComparison.Ordinal);
