@@ -95,6 +95,12 @@ public static class PackageSources
             if (key is null)
                 continue;
 
+            if (ReadEnvironmentCredential(key, value) is { } environmentCredential)
+            {
+                credentials.Add(environmentCredential);
+                continue;
+            }
+
             // nuget stores source keys as XML names, e.g. "My Feed" becomes My_x0020_Feed.
             var entry = credentialEntries.FirstOrDefault(e =>
                 string.Equals(XmlConvert.DecodeName(e.Name.LocalName), key, StringComparison.OrdinalIgnoreCase));
@@ -105,6 +111,24 @@ public static class PackageSources
         }
 
         return new ResolvedSources(sources, credentials);
+    }
+
+    static SourceCredential? ReadEnvironmentCredential(string key, string source)
+    {
+        // same as nuget: Username={user};Password={password}[;ValidAuthenticationTypes={types}]
+        var value = Environment.GetEnvironmentVariable("NuGetPackageSourceCredentials_" + key);
+        if (value is null || !value.StartsWith("Username=", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var separator = value.IndexOf(";Password=", StringComparison.OrdinalIgnoreCase);
+        if (separator < 0)
+            return null;
+
+        var username = value["Username=".Length..separator];
+        var password = value[(separator + ";Password=".Length)..];
+        var types = password.IndexOf(";ValidAuthenticationTypes=", StringComparison.OrdinalIgnoreCase);
+
+        return new SourceCredential(source, username, types < 0 ? password : password[..types]);
     }
 
     static string? ReadSetting(XElement? entry, string name)

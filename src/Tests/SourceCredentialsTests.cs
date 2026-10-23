@@ -48,6 +48,78 @@ public class SourceCredentialsTests
     }
 
     [Fact]
+    public void Environment_credentials_take_precedence_over_config()
+    {
+        var suffix = Guid.NewGuid().ToString("n");
+        var config = WriteConfig($"""
+            <configuration>
+              <packageSources>
+                <add key="Feed{suffix}" value="https://pkgs.test/feed/index.json" />
+                <add key="Other{suffix}" value="https://other.test/index.json" />
+                <add key="Invalid{suffix}" value="https://invalid.test/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <Feed{suffix}>
+                  <add key="Username" value="config" />
+                  <add key="ClearTextPassword" value="config-pat" />
+                </Feed{suffix}>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+
+        Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Feed{suffix}", "Username=env;Password=env-pat");
+        Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Other{suffix}", "Username=other;Password=other-pat;ValidAuthenticationTypes=basic");
+        Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Invalid{suffix}", "Password=pat");
+        try
+        {
+            var credentials = PackageSources.ReadConfig(config).Credentials;
+
+            Assert.Equal(
+                [
+                    new SourceCredential("https://pkgs.test/feed/index.json", "env", "env-pat"),
+                    new SourceCredential("https://other.test/index.json", "other", "other-pat"),
+                ],
+                credentials);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Feed{suffix}", null);
+            Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Other{suffix}", null);
+            Environment.SetEnvironmentVariable($"NuGetPackageSourceCredentials_Invalid{suffix}", null);
+        }
+    }
+
+    [Fact]
+    public void Config_credentials_expand_environment_variables()
+    {
+        var variable = "NDX_TEST_PAT_" + Guid.NewGuid().ToString("n");
+        var config = WriteConfig($"""
+            <configuration>
+              <packageSources>
+                <add key="Feed" value="https://pkgs.test/feed/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <Feed>
+                  <add key="Username" value="me" />
+                  <add key="ClearTextPassword" value="%{variable}%" />
+                </Feed>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+
+        Environment.SetEnvironmentVariable(variable, "secret");
+        try
+        {
+            var credential = Assert.Single(PackageSources.ReadConfig(config).Credentials);
+            Assert.Equal("secret", credential.Password);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    [Fact]
     public async Task Credentials_are_sent_only_to_the_source_host()
     {
         var inner = new CapturingHandler();
