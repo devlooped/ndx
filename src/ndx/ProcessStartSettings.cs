@@ -4,7 +4,8 @@ namespace ndx;
 
 /// <summary>
 /// Process start settings for the downloaded tool. ndx always starts the child
-/// without a shell and with inherited standard in/out/error.
+/// without a shell, with inherited standard in/out/error, and with
+/// <c>NDX_LAUNCHED=1</c> so the child can tell it was started by ndx.
 /// </summary>
 public sealed record ProcessStartSettings
 {
@@ -32,6 +33,8 @@ public sealed record ProcessStartSettings
 
         foreach (var argument in Arguments)
             start.ArgumentList.Add(argument);
+
+        start.Environment["NDX_LAUNCHED"] = "1";
 
         return start;
     }
