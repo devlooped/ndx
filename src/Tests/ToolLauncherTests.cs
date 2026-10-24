@@ -56,5 +56,6 @@ public class ToolLauncherTests
         Assert.False(start.RedirectStandardOutput);
         Assert.False(start.RedirectStandardError);
         Assert.Equal(["--flag"], start.ArgumentList.ToArray());
+        Assert.Equal("1", start.Environment["NDX_LAUNCHED"]);
     }
 }
