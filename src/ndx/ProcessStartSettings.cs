@@ -4,8 +4,10 @@ namespace ndx;
 
 /// <summary>
 /// Process start settings for the downloaded tool. ndx always starts the child
-/// without a shell, with inherited standard in/out/error, and with
-/// <c>NDX_LAUNCHED=1</c> so the child can tell it was started by ndx.
+/// without a shell, with inherited standard in/out/error, with
+/// <c>NDX_LAUNCHED=1</c> so the child can tell it was started by ndx, and with
+/// <c>CODEALTA_AUTOMATED=1</c> so a CodeAlta child exits without prompts when
+/// ndx stops it. See https://github.com/CodeAlta/CodeAlta/issues/221.
 /// </summary>
 public sealed record ProcessStartSettings
 {
@@ -35,6 +37,7 @@ public sealed record ProcessStartSettings
             start.ArgumentList.Add(argument);
 
         start.Environment["NDX_LAUNCHED"] = "1";
+        start.Environment["CODEALTA_AUTOMATED"] = "1";
 
         return start;
     }
