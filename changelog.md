@@ -1,16 +1,66 @@
 # Changelog
 
+## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-10-26)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...ci)
+
+## [v1.1.1](https://github.com/devlooped/ndx/tree/v1.1.1) (2026-10-26)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.0...v1.1.1)
+
+:twisted_rightwards_arrows: Merged:
+
+- Wait for a tool's child processes to exit before restarting [\#49](https://github.com/devlooped/ndx/pull/49) (@kzu)
+
+## [v1.1.0](https://github.com/devlooped/ndx/tree/v1.1.0) (2026-10-26)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.7...v1.1.0)
+
+:sparkles: Implemented enhancements:
+
+- Set CODEALTA\_AUTOMATED so a CodeAlta child exits without prompts [\#47](https://github.com/devlooped/ndx/pull/47) (@kzu)
+- Add the ndx logo as a JPEG asset. [\#46](https://github.com/devlooped/ndx/pull/46) (@kzu)
+
+## [v1.0.7](https://github.com/devlooped/ndx/tree/v1.0.7) (2026-10-24)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.6...v1.0.7)
+
+:sparkles: Implemented enhancements:
+
+- Set NDX\_LAUNCHED so a launched tool can tell ndx started it. [\#45](https://github.com/devlooped/ndx/pull/45) (@kzu)
+
+## [v1.0.6](https://github.com/devlooped/ndx/tree/v1.0.6) (2026-10-23)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.5...v1.0.6)
+
+:twisted_rightwards_arrows: Merged:
+
+- Support nuget.config source credentials with env var expansion [\#40](https://github.com/devlooped/ndx/pull/40) (@snipervld)
+
+## [v1.0.5](https://github.com/devlooped/ndx/tree/v1.0.5) (2026-10-22)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.4...v1.0.5)
+
+:sparkles: Implemented enhancements:
+
+- Close NeoAstra apps through unowned top-level frames only [\#42](https://github.com/devlooped/ndx/pull/42) (@kzu)
+
+:hammer: Other:
+
+- Bump all open dependency updates together [\#35](https://github.com/devlooped/ndx/issues/35)
+
+:twisted_rightwards_arrows: Merged:
+
+- Bump coverlet.collector to 10.1.0 [\#36](https://github.com/devlooped/ndx/pull/36) (@Copilot)
+- Add winget installer one-liner to the README [\#26](https://github.com/devlooped/ndx/pull/26) (@kzu)
+
 ## [v1.0.4](https://github.com/devlooped/ndx/tree/v1.0.4) (2026-10-06)
 
-[Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.0.4)
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.3...v1.0.4)
 
 :bug: Fixed bugs:
 
 - Fix install on Windows PowerShell 5.1 when PSReadLine shadows OSArchitecture [\#37](https://github.com/devlooped/ndx/pull/37) (@kzu)
-
-## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-09-21)
-
-[Full Changelog](https://github.com/devlooped/ndx/compare/v1.0.3...ci)
 
 ## [v1.0.3](https://github.com/devlooped/ndx/tree/v1.0.3) (2026-09-21)
 
