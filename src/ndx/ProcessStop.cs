@@ -8,6 +8,7 @@ namespace ndx;
 /// <summary>
 /// Gracefully stops a child we started: SIGINT / Ctrl+C, then Windows
 /// <c>WM_CLOSE</c> if the tool is a GUI, then <see cref="Process.Kill()"/> after a timeout.
+/// Processes that child started are stopped as well, before the caller starts another one.
 /// A NeoAstra app is closed through its unowned top-level <c>NeoAstra.Window</c> frames only.
 /// Any other GUI keeps the generic close.
 /// In-process <c>GenerateConsoleCtrlEvent</c> is enough — the parent survives when

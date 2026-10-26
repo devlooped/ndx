@@ -74,6 +74,7 @@ public static class Evergreen
                 if (!quiet)
                     host.Out.WriteLine($"Updating {invocation.PackageId} {command.Version} → {update.Version}");
 
+                // StopAsync returns once this child and the processes it started have exited.
                 using (shutdown.StoppingChild())
                     await child.StopAsync(host.StopTimeout, CancellationToken.None).ConfigureAwait(false);
 

@@ -136,7 +136,8 @@ Unlike `dnx`, omitting the version is `@*` — not a one-shot latest.
 `ndx my-agent` and `ndx my-agent@*` are the same: start the latest match,
 and while that process is still running, watch the feed, download a newer
 matching version *before* stopping the child, then send SIGINT / Ctrl+C
-(and `WM_CLOSE` if the tool is a GUI) and restart.
+(and `WM_CLOSE` if the tool is a GUI). The new process starts once that
+child and the processes it started have exited.
 
 `@*-*` includes prereleases. `@1.*` / `@1.1.*` pin a major or minor the
 GitHub Actions way (float the rest). A NuGet range like `[1.0,2.0)` works

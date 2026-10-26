@@ -27,6 +27,7 @@
     <EmbeddedResource Include="PortableRuntimeIdentifierGraph.json" LogicalName="PortableRuntimeIdentifierGraph.json" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
     <PackageReference Include="Readme" Version="1.2.2" PrivateAssets="all" />
   </ItemGroup>
 </Project>
