@@ -18,6 +18,37 @@ public class ArgParserTests
         Assert.Equal(["hello", "world"], parsed.ForwardedArguments);
     }
 
+    [Theory]
+    [InlineData("-i")]
+    [InlineData("--install")]
+    public void Install_option_before_package_selects_global_tool(string option)
+    {
+        var parsed = ArgParser.Parse(option, "pkg");
+
+        Assert.True(parsed.Success);
+        Assert.True(parsed.Install);
+        Assert.Equal("pkg", parsed.PackageId);
+    }
+
+    [Fact]
+    public void Install_option_after_package_is_forwarded_to_the_tool()
+    {
+        var parsed = ArgParser.Parse("pkg", "--install");
+
+        Assert.True(parsed.Success);
+        Assert.False(parsed.Install);
+        Assert.Equal(["--install"], parsed.ForwardedArguments);
+    }
+
+    [Fact]
+    public void Install_option_cannot_be_combined_with_self_update()
+    {
+        var parsed = ArgParser.Parse("--install", "--update");
+
+        Assert.False(parsed.Success);
+        Assert.Contains("--install", parsed.Error);
+    }
+
     [Fact]
     public void Tokens_after_terminator_that_look_like_ndx_flags_still_forward()
     {

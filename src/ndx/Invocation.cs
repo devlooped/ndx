@@ -9,6 +9,7 @@ public sealed record Invocation
     public bool ShowHelp { get; init; }
     public bool ShowVersion { get; init; }
     public bool Update { get; init; }
+    public bool Install { get; init; }
     public string? Error { get; init; }
 
     public string? PackageId { get; init; }

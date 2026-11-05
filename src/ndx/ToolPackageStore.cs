@@ -57,6 +57,39 @@ public sealed class ToolPackageStore
     public string GetPackageDirectory(string packageId, PackageVersion version)
         => V3PackageLayout.GetInstallPath(storeDirectory, packageId, version);
 
+    internal ToolCommand GetGlobalCommand(string packageId, PackageVersion version)
+    {
+        var globalPackageDirectory = Path.Combine(
+            storeDirectory,
+            packageId.ToLowerInvariant(),
+            version.ToString().ToLowerInvariant());
+        var packageDirectory = Path.Combine(
+            globalPackageDirectory,
+            packageId.ToLowerInvariant(),
+            version.ToString().ToLowerInvariant());
+
+        var settingsPath = FindSettings(packageDirectory)
+            ?? throw new InvalidOperationException(
+                $"Global tool {packageId} {version} is missing DotnetToolSettings.xml.");
+        var settings = ReadSettings(settingsPath);
+        if (settings.RidPackages.Count == 0 || !string.IsNullOrEmpty(settings.Runner))
+            return LocateCommand(packageDirectory, new PackageIdentity(packageId, version, ""));
+
+        var ridPackageId = RidPackageResolver.Resolve(hostRid, settings.RidPackages);
+        if (ridPackageId is null)
+        {
+            var declared = string.Join(' ', settings.RidPackages.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+            throw new InvalidOperationException(
+                $"Global tool {packageId} {version} has no RID-specific package for '{hostRid}'. Declared RIDs: {declared}.");
+        }
+
+        var ridPackageDirectory = Path.Combine(
+            globalPackageDirectory,
+            ridPackageId.ToLowerInvariant(),
+            version.ToString().ToLowerInvariant());
+        return LocateCommand(ridPackageDirectory, new PackageIdentity(ridPackageId, version, ""));
+    }
+
     public static bool IsCached(string packageDirectory)
         => V3PackageLayout.IsInstalled(packageDirectory);
 

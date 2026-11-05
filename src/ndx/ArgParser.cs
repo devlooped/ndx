@@ -49,6 +49,7 @@ public static class ArgParser
         string? configFile = null;
         string? verbosity = null;
         var update = false;
+        var install = false;
         var prerelease = false;
         var yes = false;
         var allowRollForward = false;
@@ -87,6 +88,17 @@ public static class ArgParser
             }
 
             var (option, inline) = SplitOption(arg);
+            if (packageId is null && option is not null &&
+                (option.Equals("-i", StringComparison.OrdinalIgnoreCase) ||
+                 option.Equals("--install", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (inline is not null)
+                    return Invocation.Failed($"Option '{option}' does not take a value.");
+
+                install = true;
+                continue;
+            }
+
             if (option is not null && option.Equals("--update", StringComparison.OrdinalIgnoreCase))
             {
                 update = true;
@@ -196,6 +208,9 @@ public static class ArgParser
             forwarded.Add(arg);
         }
 
+        if (update && install)
+            return Invocation.Failed("--install cannot be combined with --update.");
+
         if (update)
             return FinishUpdate(packageId, identityVersion, versionOption, updateVersion, forwarded, verbosity);
 
@@ -226,6 +241,7 @@ public static class ArgParser
             Success = true,
             PackageId = packageId,
             Version = version,
+            Install = install,
             Prerelease = prerelease,
             Yes = yes,
             AllowRollForward = allowRollForward,
