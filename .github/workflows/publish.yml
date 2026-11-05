@@ -258,8 +258,14 @@ jobs:
   #     ndx.linux-musl-arm64
   #     ndx.osx-x64
   #     ndx.osx-arm64
-  # GitHub: Settings → Environments → environment named nuget, no required reviewers and no wait timer.
+  # GitHub environment name must be nuget, the same value as the policy.
+  # Do not remove or weaken required reviewers, wait timers, or branch/tag rules
+  # on an existing environment. A release run's GITHUB_REF is refs/tags/<tag_name>.
+  # A deployment branch/tag rule must allow that tag ref or this job does not start.
+  # Protected branches only does not allow these tag releases.
   # https://learn.microsoft.com/nuget/nuget-org/trusted-publishing
+  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release
+  # https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags
   # https://github.com/NuGet/login
   nuget:
     needs: publish
