@@ -1,8 +1,16 @@
 # Changelog
 
-## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-10-26)
+## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-11-05)
 
-[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...ci)
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.2.0...ci)
+
+## [v1.2.0](https://github.com/devlooped/ndx/tree/v1.2.0) (2026-11-05)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...v1.2.0)
+
+:sparkles: Implemented enhancements:
+
+- Add global .NET tool invocation mode [\#50](https://github.com/devlooped/ndx/pull/50) (@kzu)
 
 ## [v1.1.1](https://github.com/devlooped/ndx/tree/v1.1.1) (2026-10-26)
 
