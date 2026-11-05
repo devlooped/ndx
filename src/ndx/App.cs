@@ -7,6 +7,7 @@ public sealed class NdxHost
 {
     public string WorkingDirectory { get; init; } = Directory.GetCurrentDirectory();
     public string StoreDirectory { get; init; } = DefaultStoreDirectory();
+    public string? GlobalToolsDirectory { get; init; }
     public IProcessRunner ProcessRunner { get; init; } = new ProcessRunner();
     public TextWriter Out { get; init; } = Console.Out;
     public TextWriter Error { get; init; } = Console.Error;
@@ -43,6 +44,7 @@ public static class App
 {
     const string Usage = """
         Usage: ndx <PACKAGE_NAME[@VERSION]> [options] [--] [tool arguments]
+               ndx -i|--install <PACKAGE_NAME[@VERSION]> [options] [--] [tool arguments]
                ndx --update [VERSION|ci]
                ndx --version
 
@@ -50,6 +52,7 @@ public static class App
         ndx watches the feed and restarts the tool when a newer match appears.
 
         Options:
+          -i, --install             Run the globally installed .NET tool
           --source <SOURCE>          Override package sources
           --add-source <SOURCE>      Add a package source
           --configfile <FILE>        NuGet configuration file
@@ -103,13 +106,25 @@ public static class App
             var feed = new PackageFeed(http, invocation.IgnoreFailedSources, log, progress);
             var muxer = host.DotnetMuxer ?? DotnetMuxer.Resolve();
             var store = new ToolPackageStore(feed, host.StoreDirectory, log, muxer, host.RuntimeIdentifier);
-            var command = await store.GetAsync(invocation, sources, cancellationToken).ConfigureAwait(false);
+            var globalStore = invocation.Install
+                ? new GlobalToolStore(
+                    feed,
+                    host.GlobalToolsDirectory ?? GlobalToolStore.DefaultToolsDirectory(),
+                    host.ProcessRunner,
+                    log,
+                    muxer,
+                    host.RuntimeIdentifier,
+                    host.WorkingDirectory)
+                : null;
+            var command = globalStore is null
+                ? await store.GetAsync(invocation, sources, cancellationToken).ConfigureAwait(false)
+                : await globalStore.GetAsync(invocation, sources, cancellationToken).ConfigureAwait(false);
             var range = VersionRange.FromInvocation(invocation);
             // Bare, @*, @1.*, and ranges stay current. Exact pins are one-shot (like dnx).
             if (!range.IsExact)
             {
                 return await Evergreen.RunAsync(
-                    invocation, host, store, sources, command, muxer, cancellationToken)
+                    invocation, host, store, sources, command, muxer, cancellationToken, globalStore)
                     .ConfigureAwait(false);
             }
 

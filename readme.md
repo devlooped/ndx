@@ -83,6 +83,15 @@ dnx dotnetsay@1.0.0 -- Hello
 ndx dotnetsay@1.0.0 -- Hello
 ```
 
+Use `-i` / `--install` before the package ID to run its globally installed
+.NET tool. `ndx` checks the installed version, installs or updates it as needed,
+then launches the installed entry point:
+
+```bash
+dotnet tool install -g CodeAlta
+ndx -i CodeAlta
+```
+
 Pin a feed the same way (here the CI feed used for the timings below):
 
 ```bash

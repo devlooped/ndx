@@ -49,7 +49,14 @@ public interface IProcessRunner
     IChildProcess Start(ProcessStartSettings settings);
 }
 
-public sealed class ProcessRunner : IProcessRunner
+public interface IProcessOutputRunner
+{
+    ProcessResult RunWithOutput(ProcessStartSettings settings);
+}
+
+public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+
+public sealed class ProcessRunner : IProcessRunner, IProcessOutputRunner
 {
     public int Run(ProcessStartSettings settings)
     {
@@ -58,6 +65,21 @@ public sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException($"Failed to start '{settings.FileName}'.");
         process.WaitForExit();
         return process.ExitCode;
+    }
+
+    public ProcessResult RunWithOutput(ProcessStartSettings settings)
+    {
+        var start = settings.ToStartInfo();
+        start.RedirectStandardOutput = true;
+        start.RedirectStandardError = true;
+        using var process = new Process { StartInfo = start };
+        if (!process.Start())
+            throw new InvalidOperationException($"Failed to start '{settings.FileName}'.");
+
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        return new ProcessResult(process.ExitCode, output.GetAwaiter().GetResult(), error.GetAwaiter().GetResult());
     }
 
     public IChildProcess Start(ProcessStartSettings settings)

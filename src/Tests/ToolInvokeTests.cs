@@ -84,6 +84,80 @@ public class ToolInvokeTests : IClassFixture<HelloToolFeed>
         Assert.Equal(markerTime, File.GetLastWriteTimeUtc(Marker(store, HelloToolFeed.PackageId)));
     }
 
+    [Fact]
+    public async Task Install_switch_runs_matching_global_tool_without_reinstalling()
+    {
+        var toolsDirectory = NewStore();
+        var entryPoint = CreateGlobalTool(toolsDirectory, HelloToolFeed.PackageId, HelloToolFeed.PackageVersion);
+        var runner = new RecordingProcessRunner
+        {
+            OutputResult = InstalledToolList(HelloToolFeed.PackageId, HelloToolFeed.PackageVersion),
+        };
+        var host = NewHost(runner, globalTools: toolsDirectory);
+
+        var code = await App.RunAsync(["-i", HelloToolFeed.PackageId, "--source", feed.FeedDirectory], host);
+
+        Assert.Equal(0, code);
+        Assert.Equal(1, runner.RunWithOutputCalls);
+        Assert.Equal(1, runner.StartCalls);
+        Assert.Equal(entryPoint, runner.Last!.FileName);
+        Assert.Equal(
+            ["tool", "list", HelloToolFeed.PackageId, "--global", "--format", "json"],
+            runner.Starts[0].Arguments);
+    }
+
+    [Fact]
+    public async Task Install_switch_installs_missing_global_tool()
+    {
+        var toolsDirectory = NewStore();
+        var entryPoint = CreateGlobalTool(toolsDirectory, HelloToolFeed.PackageId, HelloToolFeed.PackageVersion);
+        var runner = new RecordingProcessRunner
+        {
+            OutputResult = new(1, """{"version":1,"data":[]}""", "Tool not found."),
+        };
+        var host = NewHost(runner, globalTools: toolsDirectory);
+
+        var code = await App.RunAsync(
+            ["-i", HelloToolFeed.PackageId + "@" + HelloToolFeed.PackageVersion, "--source", feed.FeedDirectory],
+            host);
+
+        Assert.Equal(0, code);
+        Assert.Equal(2, runner.RunCalls);
+        Assert.Equal(
+            [
+                "tool", "install", "--global", HelloToolFeed.PackageId, "--version",
+                HelloToolFeed.PackageVersion, "--source", feed.FeedDirectory,
+            ],
+            runner.Starts[1].Arguments);
+        Assert.Equal(entryPoint, runner.Last!.FileName);
+    }
+
+    [Fact]
+    public async Task Install_switch_downgrades_global_tool_and_runs_installed_entry_point()
+    {
+        var toolsDirectory = NewStore();
+        var entryPoint = CreateGlobalTool(toolsDirectory, HelloToolFeed.PackageId, HelloToolFeed.PackageVersion);
+        var runner = new RecordingProcessRunner
+        {
+            OutputResult = InstalledToolList(HelloToolFeed.PackageId, "2.0.0"),
+        };
+        var host = NewHost(runner, globalTools: toolsDirectory);
+
+        var code = await App.RunAsync(
+            ["--install", HelloToolFeed.PackageId + "@" + HelloToolFeed.PackageVersion, "--source", feed.FeedDirectory],
+            host);
+
+        Assert.Equal(0, code);
+        Assert.Equal(2, runner.RunCalls);
+        Assert.Equal(
+            [
+                "tool", "update", "--global", HelloToolFeed.PackageId, "--version",
+                HelloToolFeed.PackageVersion, "--allow-downgrade", "--source", feed.FeedDirectory,
+            ],
+            runner.Starts[1].Arguments);
+        Assert.Equal(entryPoint, runner.Last!.FileName);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(7)]
@@ -286,17 +360,55 @@ public class ToolInvokeTests : IClassFixture<HelloToolFeed>
         Assert.Contains("Unexpected HTTP", error.Message);
     }
 
-    NdxHost NewHost(IProcessRunner runner, string? store = null)
+    NdxHost NewHost(IProcessRunner runner, string? store = null, string? globalTools = null)
     {
         store ??= NewStore();
         return new NdxHost
         {
             WorkingDirectory = feed.Root,
             StoreDirectory = store,
+            GlobalToolsDirectory = globalTools,
             ProcessRunner = runner,
             Out = new StringWriter(),
             Error = new StringWriter(),
         };
+    }
+
+    static ProcessResult InstalledToolList(string packageId, string version)
+        => new(
+            0,
+            $$"""{"version":1,"data":[{"packageId":"{{packageId}}","version":"{{version}}","commands":["tool"]}]}""",
+            "");
+
+    static string CreateGlobalTool(string toolsDirectory, string packageId, string version)
+    {
+        var packageVersion = PackageVersion.TryParse(version, out var parsed)
+            ? parsed
+            : throw new InvalidOperationException("bad fixture version");
+        var commandDirectory = Path.Combine(
+            toolsDirectory,
+            ".store",
+            packageId.ToLowerInvariant(),
+            packageVersion.ToString().ToLowerInvariant(),
+            packageId.ToLowerInvariant(),
+            packageVersion.ToString().ToLowerInvariant(),
+            "tools",
+            "net10.0",
+            "any");
+        Directory.CreateDirectory(commandDirectory);
+        var executable = OperatingSystem.IsWindows() ? "tool.exe" : "tool";
+        var entryPoint = Path.Combine(commandDirectory, executable);
+        File.WriteAllText(entryPoint, "");
+        File.WriteAllText(
+            Path.Combine(commandDirectory, "DotnetToolSettings.xml"),
+            $"""
+            <DotNetCliTool Version="1">
+              <Commands>
+                <Command Name="tool" EntryPoint="{executable}" Runner="executable" />
+              </Commands>
+            </DotNetCliTool>
+            """);
+        return entryPoint;
     }
 
     string[] InvokeArgs(string packageId, params string[] forwarded)

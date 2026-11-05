@@ -2,14 +2,16 @@ using ndx;
 
 namespace Tests;
 
-sealed class RecordingProcessRunner : IProcessRunner
+sealed class RecordingProcessRunner : IProcessRunner, IProcessOutputRunner
 {
     public ProcessStartSettings? Last { get; private set; }
     public List<ProcessStartSettings> Starts { get; } = [];
     public int RunCalls { get; private set; }
+    public int RunWithOutputCalls { get; private set; }
     public int StartCalls { get; private set; }
     public int Calls => RunCalls + StartCalls;
     public int ExitCode { get; set; }
+    public ProcessResult OutputResult { get; set; } = new(0, """{"version":1,"data":[]}""", "");
     public Queue<IChildProcess> Next { get; } = new();
 
     public int Run(ProcessStartSettings settings)
@@ -18,6 +20,14 @@ sealed class RecordingProcessRunner : IProcessRunner
         RunCalls++;
         Starts.Add(settings);
         return ExitCode;
+    }
+
+    public ProcessResult RunWithOutput(ProcessStartSettings settings)
+    {
+        Last = settings;
+        RunWithOutputCalls++;
+        Starts.Add(settings);
+        return OutputResult;
     }
 
     public IChildProcess Start(ProcessStartSettings settings)

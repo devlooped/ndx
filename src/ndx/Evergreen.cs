@@ -2,11 +2,11 @@ namespace ndx;
 
 /// <summary>
 /// Runs a floating-version tool and restarts it when a newer matching version
-/// appears. Stages the update on disk before nice-stopping the current child.
+/// appears. Cached updates are staged before the current child is stopped.
 /// </summary>
 public static class Evergreen
 {
-    public static async Task<int> RunAsync(
+    public static Task<int> RunAsync(
         Invocation invocation,
         NdxHost host,
         ToolPackageStore store,
@@ -14,6 +14,17 @@ public static class Evergreen
         ToolCommand command,
         string? muxer,
         CancellationToken cancellationToken = default)
+        => RunAsync(invocation, host, store, sources, command, muxer, cancellationToken, globalStore: null);
+
+    internal static async Task<int> RunAsync(
+        Invocation invocation,
+        NdxHost host,
+        ToolPackageStore store,
+        IReadOnlyList<string> sources,
+        ToolCommand command,
+        string? muxer,
+        CancellationToken cancellationToken,
+        GlobalToolStore? globalStore)
     {
         ArgumentNullException.ThrowIfNull(invocation);
         ArgumentNullException.ThrowIfNull(host);
@@ -53,11 +64,22 @@ public static class Evergreen
                 }
 
                 ToolCommand? update = null;
+                PackageVersion? globalVersion = null;
                 try
                 {
-                    update = await TryFindUpdateAsync(
-                            store, invocation, sources, range, command.Version, token)
-                        .ConfigureAwait(false);
+                    if (globalStore is null)
+                    {
+                        update = await TryFindUpdateAsync(
+                                store, invocation, sources, range, command.Version, token)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        var latest = await globalStore.GetLatestVersionAsync(invocation, sources, token)
+                            .ConfigureAwait(false);
+                        if (latest.CompareTo(command.Version) > 0 && range.Matches(latest))
+                            globalVersion = latest;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -65,20 +87,24 @@ public static class Evergreen
                         host.Error.WriteLine($"Update check failed: {ex.Message}");
                 }
 
-                if (update is null)
+                if (update is null && globalVersion is null)
                     continue;
 
                 if (child.HasExited)
                     return child.ExitCode;
 
+                var nextVersion = update?.Version ?? globalVersion
+                    ?? throw new InvalidOperationException("A package update was not resolved.");
                 if (!quiet)
-                    host.Out.WriteLine($"Updating {invocation.PackageId} {command.Version} → {update.Version}");
+                    host.Out.WriteLine($"Updating {invocation.PackageId} {command.Version} → {nextVersion}");
 
                 using (shutdown.StoppingChild())
                     await child.StopAsync(host.StopTimeout, CancellationToken.None).ConfigureAwait(false);
 
                 await child.DisposeAsync().ConfigureAwait(false);
-                command = update;
+                command = globalStore is null
+                    ? update ?? throw new InvalidOperationException("A package update was not resolved.")
+                    : await globalStore.GetAsync(invocation, sources, globalVersion, token).ConfigureAwait(false);
                 child = Start(command);
             }
 
