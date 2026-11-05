@@ -4,7 +4,8 @@
 # packed in an Alpine SDK container and published both as release assets and
 # as NuGet RID packages (ndx.linux-musl-x64 / ndx.linux-musl-arm64).
 # Also packs RID-specific plus `any` nupkgs and the top-level pointer, then
-# pushes runtime nupkgs before the pointer to nuget.org (non-prerelease) and Sleet.
+# pushes runtime nupkgs before the pointer to nuget.org on a stable release
+# (Trusted Publishing / GitHub Actions OIDC) and to Sleet.
 # After a stable release is published, submits a Devlooped.ndx update to WinGet.
 
 name: publish
@@ -117,7 +118,6 @@ jobs:
     permissions:
       contents: write
     env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       SLEET_CONNECTION: ${{ secrets.SLEET_CONNECTION }}
     steps:
       - name: 🤘 checkout
@@ -200,26 +200,6 @@ jobs:
           if ($assets.Count -eq 0) { throw 'No native archives, checksums, or install/uninstall scripts found to attach.' }
           gh release upload "${{ github.event.release.tag_name }}" @($assets.FullName) --clobber
 
-      - name: 🚀 nuget
-        if: ${{ env.NUGET_API_KEY != '' && github.event.action != 'prereleased' }}
-        shell: pwsh
-        run: |
-          $packages = @(Get-ChildItem bin -Filter *.nupkg | Where-Object Name -NotLike '*.symbols.nupkg' | Sort-Object Name)
-          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
-          $runtimePackages = @($packages | Where-Object Name -Match $runtimePackagePattern)
-          $pointerPackages = @($packages | Where-Object Name -NotMatch $runtimePackagePattern)
-
-          if ($runtimePackages.Count -eq 0) { throw 'No RID-specific or fallback packages found.' }
-          if ($pointerPackages.Count -eq 0) { throw 'No top-level pointer package found.' }
-
-          foreach ($package in $runtimePackages) {
-            dotnet nuget push $package.FullName -s https://api.nuget.org/v3/index.json -k $env:NUGET_API_KEY --skip-duplicate
-          }
-
-          foreach ($package in $pointerPackages) {
-            dotnet nuget push $package.FullName -s https://api.nuget.org/v3/index.json -k $env:NUGET_API_KEY --skip-duplicate
-          }
-
       - name: 🚀 sleet
         if: env.SLEET_CONNECTION != ''
         shell: pwsh
@@ -252,8 +232,86 @@ jobs:
           sleet push $runtimePath --config none -f --verbose -p "SLEET_FEED_CONTAINER=nuget" -p "SLEET_FEED_CONNECTIONSTRING=$env:SLEET_CONNECTION" -p "SLEET_FEED_TYPE=azure"
           sleet push $pointerPath --config none -f --verbose -p "SLEET_FEED_CONTAINER=nuget" -p "SLEET_FEED_CONNECTIONSTRING=$env:SLEET_CONNECTION" -p "SLEET_FEED_TYPE=azure"
 
-  winget:
+  # Stable releases only. Prereleases do not publish to nuget.org.
+  # This job is the only one allowed to request a GitHub OIDC token.
+  # It does not read a long-lived NuGet API key.
+  #
+  # Create this policy on https://www.nuget.org/account/trustedpublishing before the next
+  # stable release. The signed-in user must be allowed to create policies for package owner Devlooped.
+  #   Package owner: Devlooped
+  #   Repository owner: devlooped
+  #   Repository: ndx
+  #   Workflow file: publish.yml
+  #   Environment: nuget
+  #   Scope: Push only new package versions
+  #   Leave Unlist and Stage unchecked.
+  #   Glob patterns and packages, one exact ID per line (no wildcard):
+  #     ndx
+  #     ndx.any
+  #     ndx.win-x64
+  #     ndx.win-arm64
+  #     ndx.linux-x64
+  #     ndx.linux-arm64
+  #     ndx.linux-musl-x64
+  #     ndx.linux-musl-arm64
+  #     ndx.osx-x64
+  #     ndx.osx-arm64
+  # GitHub: Settings → Environments → environment named nuget, no required reviewers and no wait timer.
+  # https://learn.microsoft.com/nuget/nuget-org/trusted-publishing
+  # https://github.com/NuGet/login
+  nuget:
     needs: publish
+    if: github.event.action == 'released' && github.event.release.tag_name != 'ci'
+    runs-on: ${{ vars.PUBLISH_AGENT || 'ubuntu-latest' }}
+    environment: nuget
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: 🤘 checkout
+        uses: actions/checkout@v4
+
+      - name: ⚙ dotnet
+        uses: devlooped/actions-dotnet-env@v1
+
+      - name: 📥 packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: bin
+          merge-multiple: true
+
+      - name: 🔑 nuget login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          # nuget.org profile username for the package owner. Not an email address.
+          user: Devlooped
+
+      - name: 🚀 nuget
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $packages = @(Get-ChildItem bin -Filter *.nupkg | Where-Object Name -NotLike '*.symbols.nupkg' | Sort-Object Name)
+          $runtimePackagePattern = '^ndx\.(win-x64|win-arm64|linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|any)\..+\.nupkg$'
+          $runtimePackages = @($packages | Where-Object Name -Match $runtimePackagePattern)
+          $pointerPackages = @($packages | Where-Object Name -NotMatch $runtimePackagePattern)
+
+          if ($runtimePackages.Count -eq 0) { throw 'No RID-specific or fallback packages found.' }
+          if ($pointerPackages.Count -eq 0) { throw 'No top-level pointer package found.' }
+
+          foreach ($package in $runtimePackages) {
+            dotnet nuget push $package.FullName -s https://api.nuget.org/v3/index.json -k $env:NUGET_API_KEY --skip-duplicate
+          }
+
+          foreach ($package in $pointerPackages) {
+            dotnet nuget push $package.FullName -s https://api.nuget.org/v3/index.json -k $env:NUGET_API_KEY --skip-duplicate
+          }
+
+  winget:
+    needs: [publish, nuget]
     if: github.event.action == 'released' && github.event.release.tag_name != 'ci'
     runs-on: ubuntu-latest
     steps:

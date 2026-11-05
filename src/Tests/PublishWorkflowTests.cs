@@ -81,8 +81,13 @@ public class PublishWorkflowTests
         Assert.Contains("-r any", yml);
         Assert.Contains("dotnet nuget push", yml);
         Assert.Contains("https://api.nuget.org/v3/index.json", yml);
-        Assert.Contains("NUGET_API_KEY", yml);
-        Assert.Contains("github.event.action != 'prereleased'", yml);
+        Assert.Contains("uses: NuGet/login@v1", yml);
+        Assert.Contains("user: Devlooped", yml);
+        Assert.Contains("id-token: write", yml);
+        Assert.Contains("environment: nuget", yml);
+        Assert.Contains("steps.login.outputs.NUGET_API_KEY", yml);
+        Assert.DoesNotContain("secrets.NUGET_API_KEY", yml);
+        Assert.Contains("github.event.action == 'released'", yml);
         Assert.Contains("sleet push", yml);
         Assert.Contains("SLEET_CONNECTION", yml);
         Assert.Contains("name: package-${{ matrix.rid }}", yml);
@@ -95,6 +100,7 @@ public class PublishWorkflowTests
         Assert.Equal(2, yml.Split("linux-musl-x64|linux-musl-arm64").Length - 1);
         Assert.Contains("name: package-any", yml);
         Assert.Contains("needs: publish", yml);
+        Assert.Contains("needs: [publish, nuget]", yml);
         Assert.Contains("github.event.action == 'released'", yml);
         Assert.Contains("vedantmgoyal9/winget-releaser@v2", yml);
         Assert.Contains("identifier: Devlooped.ndx", yml);
@@ -102,9 +108,16 @@ public class PublishWorkflowTests
         Assert.Contains("token: ${{ secrets.GH_TOKEN }}", yml);
         Assert.DoesNotContain("secrets.GITHUB_TOKEN", yml);
 
-        var runtimeNuget = yml.IndexOf("foreach ($package in $runtimePackages)", StringComparison.Ordinal);
-        var pointerNuget = yml.IndexOf("foreach ($package in $pointerPackages)", StringComparison.Ordinal);
+        var nugetJob = yml.IndexOf("\n  nuget:", StringComparison.Ordinal);
+        var wingetJob = yml.IndexOf("\n  winget:", StringComparison.Ordinal);
+        Assert.True(nugetJob > 0 && wingetJob > nugetJob, "The nuget job must sit between publish and winget.");
+        var nugetSection = yml[nugetJob..wingetJob];
+        Assert.Contains("id-token: write", nugetSection);
+        Assert.DoesNotContain("contents: write", nugetSection);
+        var runtimeNuget = nugetSection.IndexOf("foreach ($package in $runtimePackages)", StringComparison.Ordinal);
+        var pointerNuget = nugetSection.IndexOf("foreach ($package in $pointerPackages)", StringComparison.Ordinal);
         Assert.True(runtimeNuget >= 0 && pointerNuget > runtimeNuget, "RID/any nupkgs must be nuget-pushed before the pointer.");
+        Assert.Equal(1, yml.Split("id-token: write").Length - 1);
 
         var runtimeSleet = yml.IndexOf("sleet push $runtimePath", StringComparison.Ordinal);
         var pointerSleet = yml.IndexOf("sleet push $pointerPath", StringComparison.Ordinal);

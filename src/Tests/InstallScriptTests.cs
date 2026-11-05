@@ -454,7 +454,9 @@ public class InstallScriptTests
         var ci = File.ReadAllText(Path.Combine(FindRepoRoot(), ".github", "workflows", "ci-release.yml"));
         Assert.Contains("dotnet nuget push", yml);
         Assert.Contains("sleet push", yml);
-        Assert.Contains("NUGET_API_KEY", yml);
+        Assert.Contains("uses: NuGet/login@v1", yml);
+        Assert.Contains("steps.login.outputs.NUGET_API_KEY", yml);
+        Assert.DoesNotContain("secrets.NUGET_API_KEY", yml);
         Assert.Contains("SLEET_CONNECTION", yml);
         Assert.Contains("sleet push", build);
         Assert.Contains("SLEET_CONNECTION", build);

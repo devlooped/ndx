@@ -65,7 +65,7 @@ Custom xUnit attributes are sometimes used for conditional test execution:
 
 #### CI/CD Pipeline
 - **Build workflow**: `.github/workflows/build.yml` - runs on PR and push to main/rel/feature branches
-- **Publish workflow**: `dotnet pack -r` each matrix RID (Native AOT nupkg), then nativepack pulls `ndx`/`ndx.exe` out of that nupkg into the existing zip/tar.gz + SHA256 GitHub assets (plus install/uninstall scripts). Also packs `any` + the top-level pointer and pushes runtime nupkgs before the pointer to nuget.org (non-prerelease, when `NUGET_API_KEY` is set) and the CI Sleet feed (when `SLEET_CONNECTION` is set).
+- **Publish workflow**: `dotnet pack -r` each matrix RID (Native AOT nupkg), then nativepack pulls `ndx`/`ndx.exe` out of that nupkg into the existing zip/tar.gz + SHA256 GitHub assets (plus install/uninstall scripts). Also packs `any` + the top-level pointer and pushes runtime nupkgs before the pointer to nuget.org on a stable release (Trusted Publishing / GitHub Actions OIDC, `NuGet/login@v1`, job `nuget`) and to the CI Sleet feed (when `SLEET_CONNECTION` is set). Prereleases skip nuget.org.
 - **Build workflow**: Packs dogfood pointer + `any` nupkgs and `sleet push`es them when `SLEET_CONNECTION` is set.
 - **CI prerelease**: `.github/workflows/ci-release.yml` runs after a successful `build` on `main` and rewrites a rolling `ci` prerelease (`--latest=false`) so dogfood is `NDX_VERSION=ci` / `ndx --update ci`.
 - **OS matrix**: Configured in `.github/workflows/os-matrix.json` (defaults to ubuntu-latest)
