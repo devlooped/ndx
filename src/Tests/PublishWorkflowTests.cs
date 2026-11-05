@@ -82,7 +82,8 @@ public class PublishWorkflowTests
         Assert.Contains("dotnet nuget push", yml);
         Assert.Contains("https://api.nuget.org/v3/index.json", yml);
         Assert.Contains("uses: NuGet/login@v1", yml);
-        Assert.Contains("user: Devlooped", yml);
+        Assert.Contains("user: ${{ secrets.NUGET_USER }}", yml);
+        Assert.DoesNotContain("user: Devlooped", yml);
         Assert.Contains("id-token: write", yml);
         Assert.Contains("environment: nuget", yml);
         Assert.Contains("steps.login.outputs.NUGET_API_KEY", yml);

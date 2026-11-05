@@ -237,7 +237,9 @@ jobs:
   # It does not read a long-lived NuGet API key.
   #
   # Create this policy on https://www.nuget.org/account/trustedpublishing before the next
-  # stable release. The signed-in user must be allowed to create policies for package owner Devlooped.
+  # stable release. Package owner below is the account that owns the packages.
+  # NuGet/login uses secrets.NUGET_USER, the username of the account that creates
+  # the policy. nuget.org rejects token exchange for an organization username.
   #   Package owner: Devlooped
   #   Repository owner: devlooped
   #   Repository: ndx
@@ -286,8 +288,8 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          # nuget.org profile username for the package owner. Not an email address.
-          user: Devlooped
+          # Policy creator's nuget.org username, not an email and not an organization owner.
+          user: ${{ secrets.NUGET_USER }}
 
       - name: 🚀 nuget
         shell: pwsh
