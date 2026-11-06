@@ -238,8 +238,9 @@ jobs:
   #
   # Create this policy on https://www.nuget.org/account/trustedpublishing before the next
   # stable release. Package owner below is the account that owns the packages.
-  # NuGet/login uses secrets.NUGET_USER, the username of the account that creates
-  # the policy. nuget.org rejects token exchange for an organization username.
+  # NuGet/login uses secrets.NUGET_USER. The verified policy creator username
+  # is kzu. Package owner remains Devlooped. nuget.org rejects token exchange
+  # for an organization username, so this is kzu and not Devlooped.
   #   Package owner: Devlooped
   #   Repository owner: devlooped
   #   Repository: ndx
@@ -294,7 +295,7 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          # Policy creator's nuget.org username, not an email and not an organization owner.
+          # Verified policy creator username kzu. Not an email and not Devlooped.
           user: ${{ secrets.NUGET_USER }}
 
       - name: 🚀 nuget
