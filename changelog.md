@@ -4,10 +4,6 @@
 
 [Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.2.0)
 
-:twisted_rightwards_arrows: Merged:
-
-- Use a variable or secret for the NuGet login username [\#54](https://github.com/devlooped/ndx/pull/54) (@kzu)
-
 ## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-11-06)
 
 [Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...ci)
@@ -18,6 +14,7 @@
 
 :twisted_rightwards_arrows: Merged:
 
+- Use a variable or secret for the NuGet login username [\#54](https://github.com/devlooped/ndx/pull/54) (@kzu)
 - Publish NuGet packages with GitHub Actions OIDC [\#51](https://github.com/devlooped/ndx/pull/51) (@kzu)
 
 ## [v1.1.1](https://github.com/devlooped/ndx/tree/v1.1.1) (2026-10-26)
