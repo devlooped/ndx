@@ -1,12 +1,16 @@
 # Changelog
 
+## [v1.2.0](https://github.com/devlooped/ndx/tree/v1.2.0) (2026-11-06)
+
+[Full Changelog](https://github.com/devlooped/ndx/compare/ci...v1.2.0)
+
+:twisted_rightwards_arrows: Merged:
+
+- Publish NuGet packages with GitHub Actions OIDC [\#51](https://github.com/devlooped/ndx/pull/51) (@kzu)
+
 ## [ci](https://github.com/devlooped/ndx/tree/ci) (2026-11-05)
 
-[Full Changelog](https://github.com/devlooped/ndx/compare/v1.2.0...ci)
-
-## [v1.2.0](https://github.com/devlooped/ndx/tree/v1.2.0) (2026-11-05)
-
-[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...v1.2.0)
+[Full Changelog](https://github.com/devlooped/ndx/compare/v1.1.1...ci)
 
 :sparkles: Implemented enhancements:
 
