@@ -297,7 +297,7 @@ jobs:
         uses: NuGet/login@v1
         with:
           # Verified policy creator username kzu. Not an email and not Devlooped.
-          user: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
+          user: ${{ vars.NUGET_OIDC || secrets.NUGET_OIDC }}
 
       - name: 🚀 nuget
         shell: pwsh
