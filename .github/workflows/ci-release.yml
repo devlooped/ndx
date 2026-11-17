@@ -125,7 +125,13 @@ jobs:
 
           Delete-CiRelease
 
+          # The devlooped SponsorLink release webhook announces releases on org
+          # discussions and X. `ci` is not a NuGet version, so its prerelease
+          # check does not apply: `!X` opts out of announcing, and `nosponsors`
+          # keeps it from injecting a sponsors section into the rolling build.
           $notes = @"
+          <!-- !X -->
+          <!-- nosponsors -->
           Rolling native build from ``$env:NDX_SHA``. Not a release.
 
           Install: ``curl -fsSL https://github.com/$env:GITHUB_REPOSITORY/releases/download/ci/install.sh | NDX_VERSION=ci sh``
