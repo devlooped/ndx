@@ -20,6 +20,12 @@
     <_NdxWindows Condition="$(RuntimeIdentifier) != '' and !$(RuntimeIdentifier.StartsWith('win'))">false</_NdxWindows>
     <DefineConstants Condition="'$(_NdxWindows)' == 'true'">$(DefineConstants);NDX_WINDOWS</DefineConstants>
   </PropertyGroup>
+  <!-- Since .NET 11, packing the pointer of an AOT tool also packs the RID packages the host can build.
+       Each RID package is packed on its own (`dotnet pack -r <rid>`, see publish.yml), so the pointer
+       pack produces only the pointer. Its RuntimeIdentifierPackages still list every RID. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
+    <CreateRidSpecificToolPackages>false</CreateRidSpecificToolPackages>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'any'">
     <PublishAot>false</PublishAot>
   </PropertyGroup>
